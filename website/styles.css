@@ -65,12 +65,22 @@ img {
   flex: 0 0 auto;
 }
 
+.back-arrow {
+  display: block;
+  width: 22px;
+  height: 22px;
+  color: var(--ink);
+  flex: 0 0 auto;
+}
+
 .nav-link {
   margin-left: auto;
+  flex: 0 0 auto;
   color: var(--muted);
   text-decoration: none;
   font-size: 0.95rem;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .nav-link:hover,
@@ -104,13 +114,13 @@ main {
   letter-spacing: -0.05em;
 }
 
-.sneeze-mark {
+img.sneeze-mark {
   display: block;
   flex: 0 0 auto;
   width: auto;
   height: 0.8em;
-  overflow: visible;
-  color: var(--ink);
+  max-width: none;
+  object-fit: contain;
   transform: translateY(0.03em);
   pointer-events: none;
 }
@@ -137,6 +147,10 @@ main {
 }
 
 .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
   margin-bottom: 56px;
 }
 
@@ -144,6 +158,7 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   min-height: 48px;
   padding: 12px 22px;
   border-radius: 999px;
@@ -158,9 +173,10 @@ main {
 }
 
 .meta {
-  margin: 12px 0 0;
+  margin: 0;
   color: var(--muted);
   font-size: 0.92rem;
+  white-space: nowrap;
 }
 
 .steps {
@@ -315,6 +331,10 @@ footer a,
   .download,
   .feedback-form button {
     width: 100%;
+  }
+
+  .meta {
+    white-space: normal;
   }
 
   .steps {
