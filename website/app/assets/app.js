@@ -2155,6 +2155,24 @@
     }
   });
 
+  // src/paths.js
+  function appDirectoryUrl() {
+    const url = new URL(window.location.href);
+    url.hash = "";
+    url.search = "";
+    let path = url.pathname || "/";
+    if (!path.endsWith("/")) {
+      const last = path.split("/").pop() || "";
+      if (last.includes(".")) {
+        path = path.slice(0, path.lastIndexOf("/") + 1);
+      } else {
+        path += "/";
+      }
+    }
+    url.pathname = path;
+    return url;
+  }
+
   // src/capture.js
   var WORKLET_SOURCE = `
 class CaptureProcessor extends AudioWorkletProcessor {
@@ -2168,6 +2186,30 @@ class CaptureProcessor extends AudioWorkletProcessor {
 }
 registerProcessor("capture-processor", CaptureProcessor);
 `;
+  var PREFERRED_AUDIO = {
+    echoCancellation: { ideal: true },
+    noiseSuppression: { ideal: false },
+    autoGainControl: { ideal: false },
+    channelCount: { ideal: 1 }
+  };
+  function audioContextConstructor() {
+    return window.AudioContext || window.webkitAudioContext;
+  }
+  function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+      const id = window.setTimeout(() => resolve("timeout"), ms);
+      promise.then(
+        (value) => {
+          window.clearTimeout(id);
+          resolve(value);
+        },
+        (error) => {
+          window.clearTimeout(id);
+          reject(error);
+        }
+      );
+    });
+  }
   var MicCapture = class {
     constructor(onAudio) {
       this.onAudio = onAudio;
@@ -2176,57 +2218,200 @@ registerProcessor("capture-processor", CaptureProcessor);
       this.node = null;
       this.source = null;
       this.silent = null;
+      this.workletObjectUrl = null;
+      this._onStateChange = null;
+      this._onTrackEnded = null;
+      this._frameLogged = false;
+      this.onCaptureError = null;
     }
     async start() {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: false
-        },
-        video: false
-      });
-      this.context = new AudioContext();
+      if (this.context || this.stream) {
+        await this.stop();
+      }
+      if (!window.isSecureContext) {
+        const error = new Error("Microphone access needs HTTPS.");
+        error.name = "SecurityError";
+        throw error;
+      }
+      if (!navigator.mediaDevices?.getUserMedia) {
+        const error = new Error("This browser cannot access a microphone.");
+        error.name = "NotSupportedError";
+        throw error;
+      }
+      const AudioCtx = audioContextConstructor();
+      if (!AudioCtx) {
+        const error = new Error("This browser cannot process microphone audio.");
+        error.name = "NotSupportedError";
+        throw error;
+      }
+      this.context = new AudioCtx();
+      const resumeAttempt = this.context.resume();
+      try {
+        this.stream = await this._openMicrophone();
+      } catch (error) {
+        await this.stop();
+        throw error;
+      }
+      try {
+        this.source = this.context.createMediaStreamSource(this.stream);
+        this.silent = this.context.createGain();
+        this.silent.gain.value = 1e-5;
+        await this._connectProcessor();
+        this.source.connect(this.node);
+        this.node.connect(this.silent);
+        this.silent.connect(this.context.destination);
+        try {
+          await withTimeout(resumeAttempt, 1500);
+        } catch (error) {
+          console.warn("AudioContext.resume() failed", error?.name || "", error?.message || error);
+        }
+        if (this.context.state === "suspended") {
+          try {
+            await this.context.resume();
+          } catch (error) {
+            console.warn("AudioContext.resume() retry failed", error?.name || "", error?.message || error);
+          }
+        }
+        if (this.context.state === "suspended") {
+          const error = new Error("Click Listening so the browser can start the microphone.");
+          error.name = "AudioContextSuspendedError";
+          throw error;
+        }
+        this._listenForInterruptions();
+      } catch (error) {
+        await this.stop();
+        throw error;
+      }
+    }
+    async resume() {
+      if (!this.context || this.context.state === "closed") return;
       if (this.context.state === "suspended") {
         await this.context.resume();
       }
-      this.source = this.context.createMediaStreamSource(this.stream);
-      this.silent = this.context.createGain();
-      this.silent.gain.value = 0;
-      if (this.context.audioWorklet) {
-        const blob = new Blob([WORKLET_SOURCE], { type: "application/javascript" });
-        const url = URL.createObjectURL(blob);
-        await this.context.audioWorklet.addModule(url);
-        URL.revokeObjectURL(url);
-        this.node = new AudioWorkletNode(this.context, "capture-processor");
-        this.node.port.onmessage = (event) => {
-          this.onAudio(event.data, this.context.sampleRate);
-        };
-      } else {
-        const processor = this.context.createScriptProcessor(4096, 1, 1);
-        processor.onaudioprocess = (event) => {
-          const input = event.inputBuffer.getChannelData(0);
-          this.onAudio(new Float32Array(input), this.context.sampleRate);
-        };
-        this.node = processor;
-      }
-      this.source.connect(this.node);
-      this.node.connect(this.silent);
-      this.silent.connect(this.context.destination);
     }
     async stop() {
-      this.node?.disconnect();
-      this.source?.disconnect();
-      this.silent?.disconnect();
+      this._unlistenForInterruptions();
+      try {
+        this.node?.disconnect();
+      } catch {
+      }
+      try {
+        this.source?.disconnect();
+      } catch {
+      }
+      try {
+        this.silent?.disconnect();
+      } catch {
+      }
       this.stream?.getTracks().forEach((track) => track.stop());
+      if (this.workletObjectUrl) {
+        URL.revokeObjectURL(this.workletObjectUrl);
+      }
       if (this.context && this.context.state !== "closed") {
-        await this.context.close();
+        try {
+          await this.context.close();
+        } catch {
+        }
       }
       this.context = null;
       this.stream = null;
       this.node = null;
       this.source = null;
       this.silent = null;
+      this.workletObjectUrl = null;
+      this._frameLogged = false;
+    }
+    async _openMicrophone() {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          audio: PREFERRED_AUDIO,
+          video: false
+        });
+      } catch (error) {
+        if (error?.name === "OverconstrainedError" || error?.name === "ConstraintNotSatisfiedError") {
+          console.warn("Microphone constraints not supported; retrying with defaults");
+          return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        }
+        throw error;
+      }
+    }
+    async _connectProcessor() {
+      const deliver = (samples) => {
+        if (!this.context) return;
+        if (!this._frameLogged) {
+          this._frameLogged = true;
+          console.info("Microphone capture is receiving audio");
+        }
+        this.onAudio(samples, this.context.sampleRate);
+      };
+      if (this.context.audioWorklet) {
+        try {
+          await Promise.race([
+            this._loadWorkletModule(),
+            new Promise((_2, reject) => {
+              window.setTimeout(() => reject(new Error("AudioWorklet addModule timed out")), 4e3);
+            })
+          ]);
+          this.node = new AudioWorkletNode(this.context, "capture-processor");
+          this.node.port.onmessage = (event) => {
+            deliver(event.data);
+          };
+          return;
+        } catch (error) {
+          console.warn("AudioWorklet failed; using script processor", error?.message || error);
+        }
+      }
+      const processor = this.context.createScriptProcessor?.(4096, 1, 1);
+      if (!processor) {
+        const error = new Error("This browser cannot process microphone audio.");
+        error.name = "NotSupportedError";
+        throw error;
+      }
+      processor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0);
+        deliver(new Float32Array(input));
+      };
+      this.node = processor;
+    }
+    async _loadWorkletModule() {
+      const blob = new Blob([WORKLET_SOURCE], { type: "application/javascript" });
+      const blobUrl = URL.createObjectURL(blob);
+      try {
+        await this.context.audioWorklet.addModule(blobUrl);
+        this.workletObjectUrl = blobUrl;
+        return;
+      } catch (error) {
+        URL.revokeObjectURL(blobUrl);
+        console.warn("Blob AudioWorklet module failed", error?.message || error);
+      }
+      const fileUrl = new URL("assets/capture-processor.js", appDirectoryUrl()).href;
+      await this.context.audioWorklet.addModule(fileUrl);
+    }
+    _listenForInterruptions() {
+      this._onStateChange = () => {
+        if (this.context?.state === "suspended") {
+          console.warn("AudioContext was suspended while listening");
+        }
+      };
+      this.context?.addEventListener("statechange", this._onStateChange);
+      const track = this.stream?.getAudioTracks?.()[0];
+      if (!track) return;
+      this._onTrackEnded = () => {
+        console.warn("Microphone track ended");
+        this.onCaptureError?.(new Error("The microphone was disconnected."));
+      };
+      track.addEventListener("ended", this._onTrackEnded);
+    }
+    _unlistenForInterruptions() {
+      if (this._onStateChange && this.context) {
+        this.context.removeEventListener("statechange", this._onStateChange);
+      }
+      const track = this.stream?.getAudioTracks?.()[0];
+      if (this._onTrackEnded && track) {
+        track.removeEventListener("ended", this._onTrackEnded);
+      }
+      this._onStateChange = null;
+      this._onTrackEnded = null;
     }
   };
 
@@ -2424,19 +2609,29 @@ registerProcessor("capture-processor", CaptureProcessor);
     }
     return best;
   }
+  function assetUrl(relativePath) {
+    return new URL(relativePath, appDirectoryUrl()).href;
+  }
   async function createYamnetDetector(onResult, onError) {
     let AudioClassifier;
     let FilesetResolver;
     try {
       ({ AudioClassifier, FilesetResolver } = await Promise.resolve().then(() => (init_audio_bundle(), audio_bundle_exports)));
     } catch (error) {
+      console.warn("MediaPipe audio tasks are unavailable", error?.message || error);
       return null;
     }
-    const wasmBase = new URL("./wasm/", window.location.href).href;
-    const modelPath = new URL("./models/yamnet.tflite", window.location.href).href;
+    const wasmBase = assetUrl("wasm").replace(/\/$/, "");
+    const modelPath = assetUrl("models/yamnet.tflite");
     try {
-      const modelProbe = await fetch(modelPath);
-      if (!modelProbe.ok) return null;
+      const modelProbe = await fetch(modelPath, {
+        credentials: "same-origin",
+        signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(8e3) : void 0
+      });
+      if (!modelProbe.ok) {
+        console.warn("YAMNet model was not found", modelProbe.status);
+        return null;
+      }
       const fileset = await FilesetResolver.forAudioTasks(wasmBase);
       const classifier = await AudioClassifier.createFromOptions(fileset, {
         baseOptions: {
@@ -2463,6 +2658,7 @@ registerProcessor("capture-processor", CaptureProcessor);
               onResult(scores.sneeze, scores.cough);
             }
           } catch (error) {
+            console.error("YAMNet classify failed", error?.message || error);
             onError?.(error.message || String(error));
           }
         },
@@ -2470,7 +2666,8 @@ registerProcessor("capture-processor", CaptureProcessor);
           classifier.close?.();
         }
       };
-    } catch {
+    } catch (error) {
+      console.warn("YAMNet failed to initialise", error?.name || "", error?.message || error);
       return null;
     }
   }
@@ -2479,6 +2676,22 @@ registerProcessor("capture-processor", CaptureProcessor);
   var TARGET_RATE = 16e3;
   var WINDOW_SAMPLES = 16e3;
   var HOP_SAMPLES = 8e3;
+  var YAMNET_TIMEOUT_MS = 12e3;
+  function withTimeout2(promise, ms, label) {
+    return new Promise((resolve, reject) => {
+      const id = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+      promise.then(
+        (value) => {
+          clearTimeout(id);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(id);
+          reject(error);
+        }
+      );
+    });
+  }
   var SneezePipeline = class {
     constructor({ onResult, onError }) {
       this.onResult = onResult;
@@ -2490,11 +2703,20 @@ registerProcessor("capture-processor", CaptureProcessor);
       this.initialized = false;
     }
     async start() {
+      this.ready = true;
       if (!this.initialized) {
-        this.yamnet = await createYamnetDetector(this.onResult, this.onError);
+        try {
+          this.yamnet = await withTimeout2(
+            createYamnetDetector(this.onResult, this.onError),
+            YAMNET_TIMEOUT_MS,
+            "YAMNet"
+          );
+        } catch (error) {
+          console.warn("YAMNet unavailable; using acoustic detection", error?.message || error);
+          this.yamnet = null;
+        }
         this.initialized = true;
       }
-      this.ready = true;
       return this.yamnet ? "yamnet" : "acoustic";
     }
     push(samples, sampleRate) {
@@ -2551,6 +2773,9 @@ registerProcessor("capture-processor", CaptureProcessor);
     return "device";
   }
   function microphoneHelp(os = getRuntime().os) {
+    if (getRuntime().shell === "web") {
+      return "Allow the microphone when your browser asks, then turn listening on.";
+    }
     if (os === "darwin") {
       return "Allow the microphone in System Settings so ach000 can hear a sneeze.";
     }
@@ -2639,6 +2864,16 @@ registerProcessor("capture-processor", CaptureProcessor);
       speechSynthesis.getVoices();
     });
   }
+  function unlockSpeech() {
+    if (!("speechSynthesis" in window)) return;
+    try {
+      const utterance = new SpeechSynthesisUtterance(" ");
+      utterance.volume = 0;
+      speechSynthesis.speak(utterance);
+    } catch (error) {
+      console.warn("Could not unlock speech", error?.message || error);
+    }
+  }
 
   // src/app.js
   var KEYS = {
@@ -2658,12 +2893,14 @@ registerProcessor("capture-processor", CaptureProcessor);
     errorMessage: null,
     sensitivity: Number(localStorage.getItem(KEYS.sensitivity) ?? DEFAULT_SENSITIVITY),
     lastTrigger: 0,
-    deviceChangeHandler: null
+    deviceChangeHandler: null,
+    starting: false
   };
   var pipeline = new SneezePipeline({
     onResult: handleClassification,
     onError: (message) => {
-      state.errorMessage = message;
+      console.error("Classifier error", message);
+      state.errorMessage = "The sneeze detector hit a problem. Try turning listening off and on.";
       state.statusText = "Classifier error";
       render();
     }
@@ -2671,8 +2908,19 @@ registerProcessor("capture-processor", CaptureProcessor);
   var capture = new MicCapture((samples, sampleRate) => {
     pipeline.push(samples, sampleRate);
   });
+  capture.onCaptureError = (error) => {
+    console.warn("Microphone capture interrupted", error?.message || error);
+    if (!state.isListening) return;
+    state.errorMessage = error?.message || "The microphone stopped.";
+    state.statusText = "Microphone stopped";
+    stop();
+  };
   var wakeLock = null;
+  var startGeneration = 0;
   var els = {};
+  function isWeb() {
+    return getRuntime().shell === "web";
+  }
   function threshold() {
     return 0.78 - state.sensitivity * 0.52;
   }
@@ -2740,44 +2988,138 @@ registerProcessor("capture-processor", CaptureProcessor);
 
 Continue?`);
   }
+  function describeListenFailure(error) {
+    const name = error?.name || "";
+    const message = error?.message || "";
+    const denied = name === "NotAllowedError" || name === "PermissionDeniedError" || name === "SecurityError" || /permission|denied|not allowed/i.test(message);
+    if (denied) {
+      return {
+        denied: true,
+        statusText: "Microphone blocked",
+        errorMessage: isWeb() ? "Microphone permission was denied." : null
+      };
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      return { denied: false, statusText: "No microphone", errorMessage: "No microphone was found." };
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+      return {
+        denied: false,
+        statusText: "Microphone busy",
+        errorMessage: "The microphone is in use by another app."
+      };
+    }
+    if (name === "NotSupportedError") {
+      return {
+        denied: true,
+        statusText: "Microphone blocked",
+        errorMessage: message || "This browser cannot access a microphone."
+      };
+    }
+    if (name === "AudioContextSuspendedError") {
+      return {
+        denied: false,
+        statusText: "Click to listen",
+        errorMessage: "Click Listening so the browser can start the microphone."
+      };
+    }
+    if (name === "AbortError") {
+      return {
+        denied: false,
+        statusText: "Could not start microphone",
+        errorMessage: "Microphone access was interrupted."
+      };
+    }
+    return {
+      denied: false,
+      statusText: "Could not start microphone",
+      errorMessage: "Could not start the microphone."
+    };
+  }
   async function start() {
+    const generation = ++startGeneration;
     state.errorMessage = null;
+    state.starting = true;
+    state.statusText = "Starting";
     render();
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (!window.isSecureContext) {
       state.permissionDenied = true;
+      state.starting = false;
       state.statusText = "Microphone blocked";
-      state.errorMessage = "This browser cannot access a microphone.";
+      state.errorMessage = "This page needs HTTPS to use the microphone.";
+      console.error("Microphone requires a secure context");
       render();
       return;
     }
-    if (await microphoneNeedsPrompt()) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      state.permissionDenied = true;
+      state.starting = false;
+      state.statusText = "Microphone blocked";
+      state.errorMessage = "This browser cannot access a microphone.";
+      console.error("navigator.mediaDevices.getUserMedia is unavailable");
+      render();
+      return;
+    }
+    if (!isWeb() && await microphoneNeedsPrompt()) {
       const allowed = await explainMicrophone();
       if (!allowed) {
         state.isListening = false;
+        state.starting = false;
         state.statusText = "Paused";
         render();
         return;
       }
     }
     try {
+      if (isWeb()) {
+        unlockSpeech();
+        const detector = pipeline.start();
+        await capture.start();
+        if (generation !== startGeneration) {
+          pipeline.stop();
+          await capture.stop();
+          state.starting = false;
+          return;
+        }
+        localStorage.setItem(KEYS.micKnown, "1");
+        state.permissionDenied = false;
+        state.isListening = true;
+        state.starting = false;
+        state.statusText = "Listening for sneezes";
+        render();
+        const kind = await detector;
+        if (generation !== startGeneration) return;
+        if (kind !== "yamnet") {
+          console.warn("YAMNet did not load; using on-device acoustic detection");
+        }
+        await requestWakeLock();
+        return;
+      }
       await pipeline.start();
       await capture.start();
+      if (generation !== startGeneration) {
+        pipeline.stop();
+        await capture.stop();
+        state.starting = false;
+        return;
+      }
       localStorage.setItem(KEYS.micKnown, "1");
       state.permissionDenied = false;
       state.isListening = true;
+      state.starting = false;
       state.statusText = "Listening for sneezes";
       watchDevices();
       await requestWakeLock();
     } catch (error) {
-      const denied = error.name === "NotAllowedError" || error.name === "SecurityError" || /permission|denied|not allowed/i.test(error.message || "");
+      console.error("Could not start listening", error?.name || "", error?.message || error);
+      const failure = describeListenFailure(error);
       state.isListening = false;
-      if (denied) {
+      state.starting = false;
+      state.permissionDenied = failure.denied;
+      state.statusText = failure.statusText;
+      state.errorMessage = failure.errorMessage;
+      if (failure.denied) {
         localStorage.setItem(KEYS.micKnown, "1");
-        state.permissionDenied = true;
-        state.statusText = "Microphone blocked";
-      } else {
-        state.errorMessage = error.message || "No microphone input is available.";
-        state.statusText = "Could not start microphone";
       }
       pipeline.stop();
       await capture.stop();
@@ -2785,11 +3127,13 @@ Continue?`);
     render();
   }
   async function stop() {
+    startGeneration += 1;
     unwatchDevices();
     await capture.stop();
     pipeline.stop();
     await releaseWakeLock();
     state.isListening = false;
+    state.starting = false;
     state.statusText = "Paused";
     render();
   }
@@ -2823,8 +3167,8 @@ Continue?`);
   function render() {
     const { os } = getRuntime();
     els.status.textContent = state.statusText;
-    els.listening.checked = state.isListening;
-    els.listeningLabel.textContent = state.isListening ? "Listening" : "Not listening";
+    els.listening.checked = state.isListening || state.starting;
+    els.listeningLabel.textContent = state.isListening || state.starting ? "Listening" : "Not listening";
     els.sensitivity.value = String(state.sensitivity);
     els.sensLabel.textContent = sensitivityLabel();
     els.count.textContent = state.sneezeCount === 1 ? "1 sneeze blessed" : `${state.sneezeCount} sneezes blessed`;
@@ -2838,6 +3182,7 @@ Continue?`);
     els.permission.hidden = !state.permissionDenied;
     els.permissionText.textContent = microphoneHelp(os);
     els.micButton.textContent = microphoneButtonLabel(os);
+    els.micButton.hidden = isWeb();
     els.loginRow.hidden = !supportsAutoStart();
     els.quit.hidden = !supportsNativeQuit() && !window.blessyou;
     els.androidNote.hidden = !(os === "android" || os === "chromeos");
@@ -2888,14 +3233,22 @@ Continue?`);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && state.isListening) {
         requestWakeLock();
+        if (isWeb()) {
+          capture.resume().catch((error) => {
+            console.warn("Could not resume AudioContext", error?.message || error);
+          });
+        }
       }
     });
     render();
-    window.setTimeout(() => {
-      if (!state.isListening && !state.permissionDenied) start();
-    }, 400);
-    if ("serviceWorker" in navigator && getRuntime().shell === "web") {
-      navigator.serviceWorker.register("./sw.js").catch(() => {
+    if (!isWeb()) {
+      window.setTimeout(() => {
+        if (!state.isListening && !state.permissionDenied) start();
+      }, 400);
+    }
+    if ("serviceWorker" in navigator && isWeb()) {
+      navigator.serviceWorker.register("./sw.js").catch((error) => {
+        console.warn("Service worker was not registered", error?.message || error);
       });
     }
   }

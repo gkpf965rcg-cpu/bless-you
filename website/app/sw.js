@@ -1,13 +1,23 @@
-const CACHE = "ach000-v1";
+const CACHE = "ach000-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./assets/app.js",
   "./icon.png",
   "./logo.svg",
   "./manifest.webmanifest"
 ];
+
+function shouldBypass(url) {
+  return (
+    url.pathname.includes("/wasm/") ||
+    url.pathname.includes("/models/") ||
+    url.pathname.endsWith(".wasm") ||
+    url.pathname.endsWith(".tflite") ||
+    url.pathname.endsWith("capture-processor.js") ||
+    url.pathname.endsWith("/assets/app.js")
+  );
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -28,12 +38,18 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin || event.request.method !== "GET") {
     return;
   }
+
+  // App JS, WASM, and the model must not be served from a stale cache.
+  if (shouldBypass(url)) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
+    fetch(event.request).then((response) => {
       if (!response.ok) return response;
       const copy = response.clone();
       caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
       return response;
-    }).catch(() => cached))
+    }).catch(() => caches.match(event.request))
   );
 });

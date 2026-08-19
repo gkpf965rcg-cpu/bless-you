@@ -10,7 +10,7 @@ import {
   supportsAutoStart,
   supportsNativeQuit
 } from "./platform.js";
-import { speakBlessYou, warmUpVoices } from "./speech/speaking.js";
+import { speakBlessYou, unlockSpeech, warmUpVoices } from "./speech/speaking.js";
 
 const KEYS = {
   sensitivity: "sensitivity",
@@ -33,13 +33,15 @@ const state = {
   errorMessage: null,
   sensitivity: Number(localStorage.getItem(KEYS.sensitivity) ?? DEFAULT_SENSITIVITY),
   lastTrigger: 0,
-  deviceChangeHandler: null
+  deviceChangeHandler: null,
+  starting: false
 };
 
 const pipeline = new SneezePipeline({
   onResult: handleClassification,
   onError: (message) => {
-    state.errorMessage = message;
+    console.error("Classifier error", message);
+    state.errorMessage = "The sneeze detector hit a problem. Try turning listening off and on.";
     state.statusText = "Classifier error";
     render();
   }
@@ -49,8 +51,21 @@ const capture = new MicCapture((samples, sampleRate) => {
   pipeline.push(samples, sampleRate);
 });
 
+capture.onCaptureError = (error) => {
+  console.warn("Microphone capture interrupted", error?.message || error);
+  if (!state.isListening) return;
+  state.errorMessage = error?.message || "The microphone stopped.";
+  state.statusText = "Microphone stopped";
+  stop();
+};
+
 let wakeLock = null;
+let startGeneration = 0;
 const els = {};
+
+function isWeb() {
+  return getRuntime().shell === "web";
+}
 
 function threshold() {
   return 0.78 - state.sensitivity * 0.52;
@@ -128,22 +143,94 @@ async function explainMicrophone() {
   return window.confirm(`${MIC_EXPLAIN}\n\nContinue?`);
 }
 
+function describeListenFailure(error) {
+  const name = error?.name || "";
+  const message = error?.message || "";
+  const denied =
+    name === "NotAllowedError" ||
+    name === "PermissionDeniedError" ||
+    name === "SecurityError" ||
+    /permission|denied|not allowed/i.test(message);
+
+  if (denied) {
+    return {
+      denied: true,
+      statusText: "Microphone blocked",
+      errorMessage: isWeb() ? "Microphone permission was denied." : null
+    };
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return { denied: false, statusText: "No microphone", errorMessage: "No microphone was found." };
+  }
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return {
+      denied: false,
+      statusText: "Microphone busy",
+      errorMessage: "The microphone is in use by another app."
+    };
+  }
+  if (name === "NotSupportedError") {
+    return {
+      denied: true,
+      statusText: "Microphone blocked",
+      errorMessage: message || "This browser cannot access a microphone."
+    };
+  }
+  if (name === "AudioContextSuspendedError") {
+    return {
+      denied: false,
+      statusText: "Click to listen",
+      errorMessage: "Click Listening so the browser can start the microphone."
+    };
+  }
+  if (name === "AbortError") {
+    return {
+      denied: false,
+      statusText: "Could not start microphone",
+      errorMessage: "Microphone access was interrupted."
+    };
+  }
+  return {
+    denied: false,
+    statusText: "Could not start microphone",
+    errorMessage: "Could not start the microphone."
+  };
+}
+
 async function start() {
+  const generation = ++startGeneration;
   state.errorMessage = null;
+  state.starting = true;
+  state.statusText = "Starting";
   render();
 
-  if (!navigator.mediaDevices?.getUserMedia) {
+  if (!window.isSecureContext) {
     state.permissionDenied = true;
+    state.starting = false;
     state.statusText = "Microphone blocked";
-    state.errorMessage = "This browser cannot access a microphone.";
+    state.errorMessage = "This page needs HTTPS to use the microphone.";
+    console.error("Microphone requires a secure context");
     render();
     return;
   }
 
-  if (await microphoneNeedsPrompt()) {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    state.permissionDenied = true;
+    state.starting = false;
+    state.statusText = "Microphone blocked";
+    state.errorMessage = "This browser cannot access a microphone.";
+    console.error("navigator.mediaDevices.getUserMedia is unavailable");
+    render();
+    return;
+  }
+
+  // Keep the Mac app's pre-prompt. Browsers must not await extra UI here,
+  // or getUserMedia / AudioContext lose the user gesture.
+  if (!isWeb() && (await microphoneNeedsPrompt())) {
     const allowed = await explainMicrophone();
     if (!allowed) {
       state.isListening = false;
+      state.starting = false;
       state.statusText = "Paused";
       render();
       return;
@@ -151,27 +238,56 @@ async function start() {
   }
 
   try {
+    if (isWeb()) {
+      unlockSpeech();
+      const detector = pipeline.start();
+      await capture.start();
+      if (generation !== startGeneration) {
+        pipeline.stop();
+        await capture.stop();
+        state.starting = false;
+        return;
+      }
+      localStorage.setItem(KEYS.micKnown, "1");
+      state.permissionDenied = false;
+      state.isListening = true;
+      state.starting = false;
+      state.statusText = "Listening for sneezes";
+      render();
+      const kind = await detector;
+      if (generation !== startGeneration) return;
+      if (kind !== "yamnet") {
+        console.warn("YAMNet did not load; using on-device acoustic detection");
+      }
+      await requestWakeLock();
+      return;
+    }
+
     await pipeline.start();
     await capture.start();
+    if (generation !== startGeneration) {
+      pipeline.stop();
+      await capture.stop();
+      state.starting = false;
+      return;
+    }
     localStorage.setItem(KEYS.micKnown, "1");
     state.permissionDenied = false;
     state.isListening = true;
+    state.starting = false;
     state.statusText = "Listening for sneezes";
     watchDevices();
     await requestWakeLock();
   } catch (error) {
-    const denied =
-      error.name === "NotAllowedError" ||
-      error.name === "SecurityError" ||
-      /permission|denied|not allowed/i.test(error.message || "");
+    console.error("Could not start listening", error?.name || "", error?.message || error);
+    const failure = describeListenFailure(error);
     state.isListening = false;
-    if (denied) {
+    state.starting = false;
+    state.permissionDenied = failure.denied;
+    state.statusText = failure.statusText;
+    state.errorMessage = failure.errorMessage;
+    if (failure.denied) {
       localStorage.setItem(KEYS.micKnown, "1");
-      state.permissionDenied = true;
-      state.statusText = "Microphone blocked";
-    } else {
-      state.errorMessage = error.message || "No microphone input is available.";
-      state.statusText = "Could not start microphone";
     }
     pipeline.stop();
     await capture.stop();
@@ -180,11 +296,13 @@ async function start() {
 }
 
 async function stop() {
+  startGeneration += 1;
   unwatchDevices();
   await capture.stop();
   pipeline.stop();
   await releaseWakeLock();
   state.isListening = false;
+  state.starting = false;
   state.statusText = "Paused";
   render();
 }
@@ -223,8 +341,8 @@ function quit() {
 function render() {
   const { os } = getRuntime();
   els.status.textContent = state.statusText;
-  els.listening.checked = state.isListening;
-  els.listeningLabel.textContent = state.isListening ? "Listening" : "Not listening";
+  els.listening.checked = state.isListening || state.starting;
+  els.listeningLabel.textContent = state.isListening || state.starting ? "Listening" : "Not listening";
   els.sensitivity.value = String(state.sensitivity);
   els.sensLabel.textContent = sensitivityLabel();
   els.count.textContent =
@@ -239,6 +357,7 @@ function render() {
   els.permission.hidden = !state.permissionDenied;
   els.permissionText.textContent = microphoneHelp(os);
   els.micButton.textContent = microphoneButtonLabel(os);
+  els.micButton.hidden = isWeb();
   els.loginRow.hidden = !supportsAutoStart();
   els.quit.hidden = !supportsNativeQuit() && !window.blessyou;
   els.androidNote.hidden = !(os === "android" || os === "chromeos");
@@ -294,16 +413,28 @@ async function init() {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && state.isListening) {
       requestWakeLock();
+      if (isWeb()) {
+        capture.resume().catch((error) => {
+          console.warn("Could not resume AudioContext", error?.message || error);
+        });
+      }
     }
   });
 
   render();
-  window.setTimeout(() => {
-    if (!state.isListening && !state.permissionDenied) start();
-  }, 400);
 
-  if ("serviceWorker" in navigator && getRuntime().shell === "web") {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  // The Mac app starts listening on launch. Browsers block AudioContext /
+  // getUserMedia without a user gesture, so the website waits for the toggle.
+  if (!isWeb()) {
+    window.setTimeout(() => {
+      if (!state.isListening && !state.permissionDenied) start();
+    }, 400);
+  }
+
+  if ("serviceWorker" in navigator && isWeb()) {
+    navigator.serviceWorker.register("./sw.js").catch((error) => {
+      console.warn("Service worker was not registered", error?.message || error);
+    });
   }
 }
 

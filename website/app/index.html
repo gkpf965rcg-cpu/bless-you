@@ -5,60 +5,72 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f6efe4">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; worker-src 'self' blob:; media-src 'self' blob: mediastream:; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; media-src 'self' blob: mediastream:; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
   <title>ach000</title>
   <meta name="description" content="Listens for sneezes and says bless you. Audio never leaves this device.">
   <link rel="icon" href="./logo.svg" type="image/svg+xml">
   <link rel="icon" href="./icon.png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=4">
 </head>
 <body>
   <main class="panel">
     <header>
-      <h1>ach000</h1>
-      <p id="status">Ready</p>
+      <a class="back" href="../" aria-label="Back to home">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Back
+      </a>
+      <div class="identity">
+        <h1>ach000</h1>
+        <p id="status">Ready</p>
+      </div>
     </header>
 
-    <label class="row">
-      <span id="listening-label">Not listening</span>
-      <input id="listening" type="checkbox" role="switch">
-    </label>
+    <div class="functions">
+      <div class="controls">
+        <label class="row">
+          <span id="listening-label">Not listening</span>
+          <input id="listening" type="checkbox" role="switch">
+        </label>
 
-    <div id="permission" class="banner" hidden>
-      <p id="permission-text"></p>
-      <button id="mic-settings" type="button">Open Microphone Settings</button>
-    </div>
-    <p id="error" class="error" hidden></p>
+        <div id="permission" class="banner" hidden>
+          <p id="permission-text"></p>
+          <button id="mic-settings" type="button">Open Microphone Settings</button>
+        </div>
+        <p id="error" class="error" hidden></p>
 
-    <hr>
-    <div>
-      <div class="row">
-        <span>Sensitivity</span>
-        <span id="sens-label">Balanced</span>
+        <hr>
+        <div>
+          <div class="row">
+            <span>Sensitivity</span>
+            <span id="sens-label">Balanced</span>
+          </div>
+          <input id="sensitivity" type="range" min="0" max="1" step="0.01" value="0.55">
+        </div>
+
+        <label class="row" id="login-row">
+          <span>Start at login</span>
+          <input id="login" type="checkbox" role="switch">
+        </label>
       </div>
-      <input id="sensitivity" type="range" min="0" max="1" step="0.01" value="0.55">
-    </div>
 
-    <label class="row" id="login-row">
-      <span>Start at login</span>
-      <input id="login" type="checkbox" role="switch">
-    </label>
+      <div class="stats">
+        <p id="count">0 sneezes blessed</p>
+        <p id="last" hidden></p>
+        <p id="privacy">Audio never leaves this device.</p>
+        <p id="android-note" hidden>Keep this screen open while you want it to listen.</p>
+      </div>
 
-    <div class="stats">
-      <p id="count">0 sneezes blessed</p>
-      <p id="last" hidden></p>
-      <p id="privacy">Audio never leaves this device.</p>
-      <p id="android-note" hidden>Keep this screen open while you want it to listen.</p>
-    </div>
-
-    <hr>
-    <div class="row">
-      <button id="bless" type="button">Bless me</button>
-      <button id="quit" type="button">Quit</button>
+      <hr>
+      <div class="row actions">
+        <button id="bless" type="button">Bless me</button>
+        <button id="quit" type="button">Quit</button>
+      </div>
     </div>
   </main>
-  <script src="./assets/app.js"></script>
+  <script src="./assets/app.js?v=2"></script>
 </body>
 </html>

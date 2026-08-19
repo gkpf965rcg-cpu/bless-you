@@ -4,6 +4,23 @@ import { createYamnetDetector } from "./yamnet.js";
 const TARGET_RATE = 16000;
 const WINDOW_SAMPLES = 16000;
 const HOP_SAMPLES = 8000;
+const YAMNET_TIMEOUT_MS = 12000;
+
+function withTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const id = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(id);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(id);
+        reject(error);
+      }
+    );
+  });
+}
 
 /** On-device sneeze classifier used on every platform. */
 export class SneezePipeline {
@@ -18,11 +35,20 @@ export class SneezePipeline {
   }
 
   async start() {
+    this.ready = true;
     if (!this.initialized) {
-      this.yamnet = await createYamnetDetector(this.onResult, this.onError);
+      try {
+        this.yamnet = await withTimeout(
+          createYamnetDetector(this.onResult, this.onError),
+          YAMNET_TIMEOUT_MS,
+          "YAMNet"
+        );
+      } catch (error) {
+        console.warn("YAMNet unavailable; using acoustic detection", error?.message || error);
+        this.yamnet = null;
+      }
       this.initialized = true;
     }
-    this.ready = true;
     return this.yamnet ? "yamnet" : "acoustic";
   }
 

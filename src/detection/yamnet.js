@@ -1,4 +1,5 @@
 import { sneezeScores } from "./classifying.js";
+import { appDirectoryUrl } from "../paths.js";
 
 function scoreFor(categories, pattern) {
   let best = 0;
@@ -11,21 +12,33 @@ function scoreFor(categories, pattern) {
   return best;
 }
 
+function assetUrl(relativePath) {
+  return new URL(relativePath, appDirectoryUrl()).href;
+}
+
 export async function createYamnetDetector(onResult, onError) {
   let AudioClassifier;
   let FilesetResolver;
   try {
     ({ AudioClassifier, FilesetResolver } = await import("@mediapipe/tasks-audio"));
   } catch (error) {
+    console.warn("MediaPipe audio tasks are unavailable", error?.message || error);
     return null;
   }
 
-  const wasmBase = new URL("./wasm/", window.location.href).href;
-  const modelPath = new URL("./models/yamnet.tflite", window.location.href).href;
+  // MediaPipe joins `${wasmBase}/${filename}`, so the base must not end with `/`.
+  const wasmBase = assetUrl("wasm").replace(/\/$/, "");
+  const modelPath = assetUrl("models/yamnet.tflite");
 
   try {
-    const modelProbe = await fetch(modelPath);
-    if (!modelProbe.ok) return null;
+    const modelProbe = await fetch(modelPath, {
+      credentials: "same-origin",
+      signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined
+    });
+    if (!modelProbe.ok) {
+      console.warn("YAMNet model was not found", modelProbe.status);
+      return null;
+    }
 
     const fileset = await FilesetResolver.forAudioTasks(wasmBase);
     const classifier = await AudioClassifier.createFromOptions(fileset, {
@@ -54,6 +67,7 @@ export async function createYamnetDetector(onResult, onError) {
             onResult(scores.sneeze, scores.cough);
           }
         } catch (error) {
+          console.error("YAMNet classify failed", error?.message || error);
           onError?.(error.message || String(error));
         }
       },
@@ -61,7 +75,8 @@ export async function createYamnetDetector(onResult, onError) {
         classifier.close?.();
       }
     };
-  } catch {
+  } catch (error) {
+    console.warn("YAMNet failed to initialise", error?.name || "", error?.message || error);
     return null;
   }
 }

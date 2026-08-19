@@ -55,6 +55,51 @@ header {
   margin-bottom: 16px;
 }
 
+.back {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  margin: -4px 0 0 -6px;
+  padding: 4px 8px 4px 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.back svg {
+  width: 16px;
+  height: 16px;
+}
+
+.back:hover,
+.back:focus-visible {
+  color: var(--ink);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+body.web header {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  align-items: start;
+  text-align: center;
+}
+
+body.web .back {
+  display: inline-flex;
+  justify-self: start;
+}
+
+body.web .identity {
+  grid-column: 2;
+}
+
 h1 {
   margin: 0 0 4px;
   font-family: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif;
@@ -72,6 +117,44 @@ h1 {
   font-size: 0.8rem;
 }
 
+.functions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+body.web .functions {
+  width: 100%;
+  align-items: center;
+  text-align: center;
+}
+
+body.web .controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: auto;
+  max-width: 100%;
+}
+
+body.web .controls .row {
+  justify-content: center;
+  width: auto;
+  gap: 12px;
+}
+
+body.web .controls input[type="range"] {
+  width: 168px;
+}
+
+body.web .controls hr {
+  width: 168px;
+}
+
+body.web .functions hr {
+  width: 100%;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -79,6 +162,22 @@ h1 {
   gap: 12px;
   margin: 12px 0;
   font-weight: 500;
+}
+
+body.web .row {
+  gap: 16px;
+}
+
+.actions {
+  justify-content: flex-start;
+}
+
+body.web .actions {
+  justify-content: center;
+}
+
+body.web .stats {
+  text-align: center;
 }
 
 hr {
@@ -118,6 +217,10 @@ input[type="range"] {
 .error {
   color: #b42318;
   font-size: 0.8rem;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 .stats {

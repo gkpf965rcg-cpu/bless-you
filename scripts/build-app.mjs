@@ -9,6 +9,7 @@ const wasmSrc = join(root, "node_modules", "@mediapipe", "tasks-audio", "wasm");
 const wasmDest = join(root, "website", "app", "wasm");
 
 mkdirSync(outDir, { recursive: true });
+cpSync(join(root, "src", "capture-processor.js"), join(outDir, "capture-processor.js"));
 
 await esbuild.build({
   entryPoints: [join(root, "src", "app.js")],

@@ -68,3 +68,15 @@ export function warmUpVoices() {
     speechSynthesis.getVoices();
   });
 }
+
+/** Safari only speaks after speechSynthesis is used in a user gesture. */
+export function unlockSpeech() {
+  if (!("speechSynthesis" in window)) return;
+  try {
+    const utterance = new SpeechSynthesisUtterance(" ");
+    utterance.volume = 0;
+    speechSynthesis.speak(utterance);
+  } catch (error) {
+    console.warn("Could not unlock speech", error?.message || error);
+  }
+}

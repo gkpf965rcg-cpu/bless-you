@@ -33,6 +33,9 @@ export function deviceNoun(os = getRuntime().os) {
 }
 
 export function microphoneHelp(os = getRuntime().os) {
+  if (getRuntime().shell === "web") {
+    return "Allow the microphone when your browser asks, then turn listening on.";
+  }
   if (os === "darwin") {
     return "Allow the microphone in System Settings so ach000 can hear a sneeze.";
   }
