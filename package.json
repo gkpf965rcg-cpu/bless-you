@@ -7,7 +7,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "start": "npm run build:app && electron .",
+    "start": "python3 scripts/make-icon.py && npm run build:app && electron .",
     "build:app": "node scripts/build-app.mjs",
     "build": "bash scripts/build.sh",
     "build:current": "bash scripts/build.sh",

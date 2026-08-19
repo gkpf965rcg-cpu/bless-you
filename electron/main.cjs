@@ -37,13 +37,14 @@ function hardenSession(sess) {
 
 function createWindow() {
   const linux = process.platform === "linux";
+  const local = !app.isPackaged;
   mainWindow = new BrowserWindow({
     width: 280,
     height: 470,
-    show: linux,
+    show: linux || local,
     frame: false,
     resizable: false,
-    skipTaskbar: !linux,
+    skipTaskbar: !linux && !local,
     fullscreenable: false,
     transparent: false,
     alwaysOnTop: true,
@@ -67,7 +68,7 @@ function createWindow() {
   });
 
   mainWindow.on("blur", () => {
-    if (process.platform !== "linux") {
+    if (process.platform !== "linux" && app.isPackaged) {
       mainWindow.hide();
     }
   });
@@ -239,6 +240,7 @@ async function explainMicrophone() {
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
+  console.error("ach000 is already running. Click the a in the menu bar, or quit that copy first.");
   app.quit();
 } else {
   app.on("second-instance", () => {
@@ -251,11 +253,17 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     hardenSession(session.defaultSession);
-    if (process.platform === "darwin" && app.dock) {
+    if (process.platform === "darwin" && app.dock && app.isPackaged) {
       app.dock.hide();
     }
     createWindow();
     createTray();
+    if (!app.isPackaged) {
+      positionWindow();
+      mainWindow?.show();
+      mainWindow?.focus();
+      console.log("ach000 is running locally. The panel should be on screen; there is also an a in the menu bar.");
+    }
 
     ipcMain.handle("autostart:get", () => getAutoStart());
     ipcMain.handle("autostart:set", (_event, enabled) => setAutoStart(Boolean(enabled)));

@@ -1,16 +1,6 @@
 const form = document.getElementById("feedback-form");
 const status = document.getElementById("status");
 const submit = document.getElementById("submit");
-const back = document.getElementById("back");
-
-if (back) {
-  back.addEventListener("click", (event) => {
-    if (window.history.length > 1) {
-      event.preventDefault();
-      window.history.back();
-    }
-  });
-}
 
 function showStatus(text, isError) {
   status.hidden = false;
