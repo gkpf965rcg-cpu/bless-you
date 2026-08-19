@@ -2,5 +2,17 @@
   "framework": null,
   "installCommand": "npm ci --omit=dev",
   "buildCommand": "npm run build:app",
-  "outputDirectory": "website"
+  "outputDirectory": "website",
+  "redirects": [
+    {
+      "source": "/downloads/BlessYou.dmg",
+      "destination": "https://github.com/gkpf965rcg-cpu/bless-you/releases/latest/download/BlessYou.dmg",
+      "permanent": false
+    },
+    {
+      "source": "/downloads/BlessYou-mac.dmg",
+      "destination": "https://github.com/gkpf965rcg-cpu/bless-you/releases/latest/download/BlessYou.dmg",
+      "permanent": false
+    }
+  ]
 }
