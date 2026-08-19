@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.build/
+.swiftpm/
+*.xcuserstate
+.DS_Store
+.vercel
+.env
+.env.*
+website/app/wasm/
+website/app/models/*.tflite
+website/app/fonts/
+website/downloads/*.dmg
+website/downloads/*.zip
+website/downloads/*.exe
+website/downloads/*.AppImage
+*.map

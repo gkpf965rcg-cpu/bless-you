@@ -1,0 +1,12 @@
+node_modules
+dist
+.build
+.swiftpm
+*.map
+.DS_Store
+.env
+.env.*
+website/downloads/*.dmg
+website/downloads/*.zip
+website/downloads/*.exe
+website/downloads/*.AppImage

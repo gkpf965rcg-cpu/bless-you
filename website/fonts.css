@@ -1,0 +1,15 @@
+@font-face {
+  font-family: Fraunces;
+  font-style: normal;
+  font-weight: 500 640;
+  font-display: swap;
+  src: url("./fonts/fraunces-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: Outfit;
+  font-style: normal;
+  font-weight: 380 650;
+  font-display: swap;
+  src: url("./fonts/outfit-latin.woff2") format("woff2");
+}

@@ -1,0 +1,82 @@
+{
+  "name": "bless-you",
+  "version": "1.0.0",
+  "description": "Listens for sneezes and says bless you.",
+  "main": "electron/main.cjs",
+  "author": "Bless You",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "npm run build:app && electron .",
+    "build:app": "node scripts/build-app.mjs",
+    "build": "npm run build:app && electron-builder --mac",
+    "build:current": "npm run build:app && electron-builder --mac",
+    "web": "npm run build:app && python3 -m http.server --bind 127.0.0.1 --directory website 8787"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-audio": "^0.10.32",
+    "esbuild": "^0.25.4"
+  },
+  "devDependencies": {
+    "electron": "^42.4.1",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "app.blessyou.desktop",
+    "productName": "Bless You",
+    "artifactName": "BlessYou-${os}.${ext}",
+    "afterAllArtifactBuild": "scripts/notarize.cjs",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asar": false,
+    "files": [
+      "electron/**",
+      "website/app/**",
+      "package.json",
+      "!node_modules/**"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["universal"]
+        }
+      ],
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSHighResolutionCapable": true,
+        "NSMicrophoneUsageDescription": "Bless You listens with the microphone so it can hear a sneeze and say bless you. Audio stays on this device and is never recorded or uploaded."
+      }
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        { "target": "zip", "arch": ["x64"] }
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "target": [
+        { "target": "zip", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "Bless You"
+    },
+    "dmg": {
+      "title": "Bless You"
+    }
+  }
+}

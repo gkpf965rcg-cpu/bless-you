@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "installCommand": "npm ci --omit=dev",
+  "buildCommand": "npm run build:app",
+  "outputDirectory": "website"
+}
