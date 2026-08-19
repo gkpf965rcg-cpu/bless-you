@@ -8,15 +8,40 @@
       "maxDuration": 10
     }
   },
+  "headers": [
+    {
+      "source": "/app/:path*",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "microphone=(self)"
+        }
+      ]
+    },
+    {
+      "source": "/app/wasm/:file*.wasm",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/wasm"
+        }
+      ]
+    }
+  ],
   "redirects": [
     {
+      "source": "/downloads/ach000-mac.dmg",
+      "destination": "https://github.com/gkpf965rcg-cpu/bless-you/releases/latest/download/ach000-mac.dmg",
+      "permanent": false
+    },
+    {
       "source": "/downloads/BlessYou.dmg",
-      "destination": "https://github.com/gkpf965rcg-cpu/bless-you/releases/latest/download/BlessYou.dmg",
+      "destination": "https://github.com/gkpf965rcg-cpu/bless-you/releases/latest/download/ach000-mac.dmg",
       "permanent": false
     },
     {
       "source": "/downloads/BlessYou-mac.dmg",
-      "destination": "https://github.com/gkpf965rcg-cpu/bless-you/releases/latest/download/BlessYou.dmg",
+      "destination": "https://github.com/gkpf965rcg-cpu/bless-you/releases/latest/download/ach000-mac.dmg",
       "permanent": false
     }
   ]
