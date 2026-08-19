@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Listens for sneezes and says bless you.",
   "main": "electron/main.cjs",
-  "author": "Bless You",
+  "author": "ach000",
   "license": "MIT",
   "private": true,
   "scripts": {
@@ -22,8 +22,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "app.blessyou.desktop",
-    "productName": "Bless You",
+    "appId": "app.ach000.desktop",
+    "productName": "ach000",
     "artifactName": "BlessYou-${os}.${ext}",
     "afterAllArtifactBuild": "scripts/notarize.cjs",
     "directories": {
@@ -54,7 +54,7 @@
       "extendInfo": {
         "LSUIElement": true,
         "NSHighResolutionCapable": true,
-        "NSMicrophoneUsageDescription": "Bless You listens with the microphone so it can hear a sneeze and say bless you. Audio stays on this device and is never recorded or uploaded."
+        "NSMicrophoneUsageDescription": "ach000 listens with the microphone so it can hear a sneeze and say bless you. Audio stays on this device and is never recorded or uploaded."
       }
     },
     "win": {
@@ -73,10 +73,10 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "shortcutName": "Bless You"
+      "shortcutName": "ach000"
     },
     "dmg": {
-      "title": "Bless You"
+      "title": "ach000"
     }
   }
 }

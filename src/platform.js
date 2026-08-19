@@ -34,18 +34,18 @@ export function deviceNoun(os = getRuntime().os) {
 
 export function microphoneHelp(os = getRuntime().os) {
   if (os === "darwin") {
-    return "Allow the microphone in System Settings so Bless You can hear a sneeze.";
+    return "Allow the microphone in System Settings so ach000 can hear a sneeze.";
   }
   if (os === "win32") {
-    return "Allow the microphone in Windows Settings so Bless You can hear a sneeze.";
+    return "Allow the microphone in Windows Settings so ach000 can hear a sneeze.";
   }
   if (os === "linux") {
-    return "Allow the microphone in your system sound settings so Bless You can hear a sneeze.";
+    return "Allow the microphone in your system sound settings so ach000 can hear a sneeze.";
   }
   if (os === "android" || os === "chromeos") {
-    return "Allow the microphone when asked, and keep this screen open so Bless You can keep listening.";
+    return "Allow the microphone when asked, and keep this screen open so ach000 can keep listening.";
   }
-  return "Allow the microphone when your browser asks so Bless You can hear a sneeze.";
+  return "Allow the microphone when your browser asks so ach000 can hear a sneeze.";
 }
 
 export function microphoneButtonLabel(os = getRuntime().os) {

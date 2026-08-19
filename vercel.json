@@ -3,6 +3,11 @@
   "installCommand": "npm ci --omit=dev",
   "buildCommand": "npm run build:app",
   "outputDirectory": "website",
+  "functions": {
+    "api/feedback.js": {
+      "maxDuration": 10
+    }
+  },
   "redirects": [
     {
       "source": "/downloads/BlessYou.dmg",

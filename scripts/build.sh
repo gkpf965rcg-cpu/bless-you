@@ -77,15 +77,15 @@ if [[ -f "${DOWNLOADS}/BlessYou.dmg" ]]; then
 fi
 
 if [[ "${1:-}" == "--install" ]]; then
-  APP_DIR="$(ls -d "${ROOT}"/dist/mac-universal/Bless\ You.app 2>/dev/null | head -n 1 || true)"
+  APP_DIR="$(ls -d "${ROOT}"/dist/mac-universal/ach000.app 2>/dev/null | head -n 1 || true)"
   if [[ -z "${APP_DIR}" ]]; then
-    APP_DIR="$(ls -d "${ROOT}"/dist/mac*/Bless\ You.app 2>/dev/null | head -n 1 || true)"
+    APP_DIR="$(ls -d "${ROOT}"/dist/mac*/ach000.app 2>/dev/null | head -n 1 || true)"
   fi
   if [[ -n "${APP_DIR}" && "$(uname -s)" == "Darwin" ]]; then
     echo "Installing to /Applications..."
-    rm -rf "/Applications/Bless You.app"
+    rm -rf "/Applications/ach000.app"
     cp -R "${APP_DIR}" "/Applications/"
-    xattr -cr "/Applications/Bless You.app" || true
+    xattr -cr "/Applications/ach000.app" || true
   else
     echo "No packaged Mac app found to install."
   fi

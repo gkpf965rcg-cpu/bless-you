@@ -124,11 +124,11 @@ function createTray() {
     image.setTemplateImage(true);
   }
   tray = new Tray(image);
-  tray.setToolTip("Bless You");
+  tray.setToolTip("ach000");
   tray.on("click", toggleWindow);
   tray.on("right-click", () => {
     const menu = Menu.buildFromTemplate([
-      { label: "Open Bless You", click: () => { positionWindow(); mainWindow?.show(); } },
+      { label: "Open ach000", click: () => { positionWindow(); mainWindow?.show(); } },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } }
     ]);
     tray.popUpContextMenu(menu);
@@ -136,7 +136,7 @@ function createTray() {
 }
 
 function linuxAutostartPath() {
-  return path.join(os.homedir(), ".config", "autostart", "bless-you.desktop");
+  return path.join(os.homedir(), ".config", "autostart", "ach000.desktop");
 }
 
 function linuxExecCommand() {
@@ -166,7 +166,7 @@ function setAutoStart(enabled) {
         desktop,
         `[Desktop Entry]
 Type=Application
-Name=Bless You
+Name=ach000
 Exec=${linuxExecCommand()}
 X-GNOME-Autostart-enabled=true
 `
@@ -231,7 +231,7 @@ async function explainMicrophone() {
     buttons: ["Continue", "Not Now"],
     defaultId: 0,
     cancelId: 1,
-    message: "Bless You needs the microphone",
+    message: "ach000 needs the microphone",
     detail: MIC_EXPLAIN_DETAIL
   });
   return result.response === 0;

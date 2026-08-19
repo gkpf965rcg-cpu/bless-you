@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedback — ach000</title>
+  <meta name="description" content="Send optional feedback about ach000.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+  <link rel="icon" href="./logo.svg" type="image/svg+xml">
+  <link rel="icon" href="./icon.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <a class="brand" href="./">
+        <img class="mark" src="./logo.svg" alt="">
+        <span class="wordmark">ach000</span>
+      </a>
+      <a class="nav-link" href="./app/">Open in browser</a>
+    </header>
+
+    <main>
+      <p class="eyebrow">Feedback</p>
+      <h1>Feedback</h1>
+      <form class="feedback-form" id="feedback-form" method="post" action="/api/feedback" novalidate>
+        <label>
+          Message
+          <textarea name="message" id="message" maxlength="2000" required placeholder="Tell us what you think…"></textarea>
+        </label>
+        <label>
+          Email <span class="hint">(optional, only if you want a reply)</span>
+          <input type="email" name="email" id="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
+        </label>
+        <div class="hp" aria-hidden="true">
+          <label>Company
+            <input type="text" name="company" id="company" tabindex="-1" autocomplete="off">
+          </label>
+        </div>
+        <button type="submit" id="submit">Send feedback</button>
+      </form>
+      <p class="status" id="status" hidden></p>
+    </main>
+  </div>
+  <script src="./feedback.js"></script>
+</body>
+</html>

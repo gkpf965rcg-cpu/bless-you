@@ -9,9 +9,9 @@ DMG=""
 
 find_app() {
   local match
-  match="$(ls -d "${ROOT}"/dist/mac-universal/Bless\ You.app 2>/dev/null | head -n 1 || true)"
+  match="$(ls -d "${ROOT}"/dist/mac-universal/ach000.app 2>/dev/null | head -n 1 || true)"
   if [[ -z "${match}" ]]; then
-    match="$(ls -d "${ROOT}"/dist/mac*/Bless\ You.app 2>/dev/null | head -n 1 || true)"
+    match="$(ls -d "${ROOT}"/dist/mac*/ach000.app 2>/dev/null | head -n 1 || true)"
   fi
   APP_BUNDLE="${match}"
 }
@@ -33,10 +33,10 @@ fail() {
 find_app
 find_dmg
 
-[[ -n "${APP_BUNDLE}" && -d "${APP_BUNDLE}" ]] || fail "Bless You.app not found under dist/"
+[[ -n "${APP_BUNDLE}" && -d "${APP_BUNDLE}" ]] || fail "ach000.app not found under dist/"
 [[ -n "${DMG}" && -f "${DMG}" ]] || fail "BlessYou DMG not found under dist/"
 
-BINARY="${APP_BUNDLE}/Contents/MacOS/Bless You"
+BINARY="${APP_BUNDLE}/Contents/MacOS/ach000"
 if [[ ! -f "${BINARY}" ]]; then
   BINARY="$(find "${APP_BUNDLE}/Contents/MacOS" -type f | head -n 1 || true)"
 fi

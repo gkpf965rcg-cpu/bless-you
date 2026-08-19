@@ -1,6 +1,6 @@
 {
-  "name": "Bless You",
-  "short_name": "Bless You",
+  "name": "ach000",
+  "short_name": "ach000",
   "description": "Listens for sneezes and says bless you.",
   "start_url": "./index.html",
   "scope": "./",

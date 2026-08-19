@@ -19,7 +19,7 @@ const KEYS = {
 };
 
 const MIC_EXPLAIN =
-  "Bless You listens with the microphone so it can hear a sneeze and say bless you. Audio stays on this device and is never recorded, stored, or uploaded.";
+  "ach000 listens with the microphone so it can hear a sneeze and say bless you. Audio stays on this device and is never recorded, stored, or uploaded.";
 
 const COOLDOWN = 3.0;
 const DEFAULT_SENSITIVITY = 0.55;

@@ -7,6 +7,7 @@ dist/
 .vercel
 .env
 .env.*
+!.env.example
 website/app/wasm/
 website/app/models/*.tflite
 website/app/fonts/

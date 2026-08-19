@@ -54,54 +54,73 @@ def write_png(path, width, height, pixels):
         handle.write(png_bytes(width, height, pixels))
 
 
-def render_app_icon(size):
-    cream = (244, 230, 208)
-    cream_dark = (232, 208, 176)
-    terracotta = (196, 92, 38)
-    gold = (214, 154, 72)
-    sparkle = (255, 244, 220)
-    pixels = bytearray(size * size * 4)
-    half = size / 2.0
-    icon_radius = size * 0.223
-    icon_extent = size * 0.42
+def dist_to_segment(px, py, ax, ay, bx, by):
+    abx = bx - ax
+    aby = by - ay
+    length = abx * abx + aby * aby
+    if length == 0:
+        return math.hypot(px - ax, py - ay)
+    t = clamp(((px - ax) * abx + (py - ay) * aby) / length)
+    return math.hypot(px - (ax + abx * t), py - (ay + aby * t))
 
+
+def render_letter_a(size):
+    """White square, black capital A. Used if the macOS Arial Black renderer is unavailable."""
+    pixels = bytearray(size * size * 4)
+    for i in range(0, len(pixels), 4):
+        pixels[i : i + 4] = b"\xff\xff\xff\xff"
+    left = (size * 0.16, size * 0.84)
+    right = (size * 0.84, size * 0.84)
+    peak = (size * 0.5, size * 0.16)
+    bar_y = size * 0.58
+    stroke = size * 0.11
+    bar = size * 0.08
     for y in range(size):
         for x in range(size):
-            nx = x + 0.5 - half
-            ny = y + 0.5 - half
-            sdf = rounded_rect_sdf(nx, ny, icon_extent, icon_radius)
-            edge = clamp(0.5 - sdf)
-            if edge <= 0:
-                continue
-
-            t = clamp((ny + icon_extent) / (icon_extent * 2))
-            color = mix(cream, cream_dark, t * 0.55)
-            glow = math.exp(-((nx / (size * 0.22)) ** 2 + ((ny + size * 0.04) / (size * 0.22)) ** 2))
-            color = mix(color, sparkle, glow * 0.18)
-
-            for radius, width, strength in (
-                (size * 0.11, size * 0.018, 0.95),
-                (size * 0.17, size * 0.016, 0.72),
-                (size * 0.23, size * 0.014, 0.5),
-            ):
-                dist = math.hypot(nx, ny + size * 0.02)
-                ring = math.exp(-((dist - radius) / width) ** 2)
-                angle = math.atan2(-(ny + size * 0.02), nx)
-                fan = clamp((math.cos(angle - 0.55) + 0.35) / 1.35)
-                color = mix(color, terracotta, ring * fan * strength)
-
-            for sx, sy, r in (
-                (size * 0.16, -size * 0.18, size * 0.028),
-                (-size * 0.18, -size * 0.12, size * 0.016),
-                (size * 0.08, size * 0.2, size * 0.013),
-            ):
-                d = math.hypot(nx - sx, ny - sy)
-                star = math.exp(-(d / r) ** 2)
-                color = mix(color, gold, star * 0.9)
-
-            idx = (y * size + x) * 4
-            pixels[idx : idx + 4] = bytes([*color, int(edge * 255)])
+            px, py = x + 0.5, y + 0.5
+            in_a = (
+                dist_to_segment(px, py, peak[0], peak[1], left[0], left[1]) <= stroke
+                or dist_to_segment(px, py, peak[0], peak[1], right[0], right[1]) <= stroke
+                or (
+                    dist_to_segment(px, py, size * 0.30, bar_y, size * 0.70, bar_y) <= bar
+                    and py > size * 0.42
+                )
+            )
+            if in_a:
+                idx = (y * size + x) * 4
+                pixels[idx : idx + 4] = b"\x00\x00\x00\xff"
     return pixels
+
+
+def write_letter_a_png(path, size):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    swift = os.path.join(ROOT, "scripts", "render-a-icon.swift")
+    if os.path.isfile(swift):
+        import subprocess
+
+        try:
+            subprocess.run(["swift", swift, str(size), path], check=True, capture_output=True)
+            return
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    write_png(path, size, size, render_letter_a(size))
+
+
+def resize_png(src, dest, size):
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    import shutil
+    import subprocess
+
+    try:
+        subprocess.run(
+            ["sips", "-z", str(size), str(size), src, "--out", dest],
+            check=True,
+            capture_output=True,
+        )
+        return
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    shutil.copyfile(src, dest)
 
 
 def downsample(pixels, src, dest):
@@ -180,19 +199,27 @@ def write_ico(path, images):
 
 
 def main():
-    master = 512
-    pixels = render_app_icon(master)
-    write_png(os.path.join(ROOT, "website", "icon.png"), master, master, pixels)
-    write_png(os.path.join(ROOT, "website", "app", "icon.png"), master, master, pixels)
-    write_png(os.path.join(ROOT, "build", "icon.png"), master, master, pixels)
+    import shutil
+    import tempfile
 
-    touch = downsample(pixels, master, 180)
-    write_png(os.path.join(ROOT, "website", "app", "apple-touch-icon.png"), 180, 180, touch)
+    master = os.path.join(ROOT, "website", "icon.png")
+    write_letter_a_png(master, 512)
+    for dest in (
+        os.path.join(ROOT, "website", "app", "icon.png"),
+        os.path.join(ROOT, "build", "icon.png"),
+    ):
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.copyfile(master, dest)
+
+    resize_png(master, os.path.join(ROOT, "website", "app", "apple-touch-icon.png"), 180)
 
     ico_images = []
-    for size in (16, 32, 48, 256):
-        scaled = downsample(pixels, master, size) if size != master else pixels
-        ico_images.append((size, size, png_bytes(size, size, scaled)))
+    with tempfile.TemporaryDirectory() as tmp:
+        for size in (16, 32, 48, 256):
+            scaled = os.path.join(tmp, f"{size}.png")
+            resize_png(master, scaled, size)
+            with open(scaled, "rb") as handle:
+                ico_images.append((size, size, handle.read()))
     write_ico(os.path.join(ROOT, "build", "icon.ico"), ico_images)
 
     mic_template = render_mic(32, (0, 0, 0))

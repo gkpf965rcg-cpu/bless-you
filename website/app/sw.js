@@ -1,13 +1,11 @@
-const CACHE = "bless-you-v2";
+const CACHE = "ach000-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./fonts.css",
-  "./fonts/fraunces-latin.woff2",
-  "./fonts/outfit-latin.woff2",
   "./assets/app.js",
   "./icon.png",
+  "./logo.svg",
   "./manifest.webmanifest"
 ];
 

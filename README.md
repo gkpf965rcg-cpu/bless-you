@@ -1,4 +1,4 @@
-# Bless You
+# ach000
 
 A tiny Mac menu bar app that listens for sneezes and says “bless you.” Audio is classified on your computer and never recorded or uploaded.
 
@@ -10,8 +10,8 @@ Host the `website/` folder over **HTTPS**, then:
 
 1. Download `BlessYou.dmg`.
 2. Optional: check the SHA-256 on the download page against `shasum -a 256 BlessYou.dmg`.
-3. Open the disk image and drag **Bless You** into **Applications**.
-4. Open Bless You and allow the microphone when asked.
+3. Open the disk image and drag **ach000** into **Applications**.
+4. Open ach000 and allow the microphone when asked.
 5. Look for the microphone icon in the menu bar.
 
 Notarized Developer ID builds open normally in Gatekeeper. If you built from source without signing credentials, macOS may warn that the app is from an unidentified developer.
@@ -38,7 +38,7 @@ npm install
 ./scripts/serve-website.sh
 ```
 
-Then open [http://127.0.0.1:8787](http://127.0.0.1:8787) (loopback only) or launch **Bless You** from Applications.
+Then open [http://127.0.0.1:8787](http://127.0.0.1:8787) (loopback only) or launch **ach000** from Applications.
 
 Local preview uses HTTP on `127.0.0.1`. Public downloads must be served over HTTPS.
 
@@ -67,6 +67,6 @@ Without `CODESIGN_IDENTITY`, the build is ad-hoc signed and **not for public dow
 
 ## How sneeze detection works
 
-Bless You prefers [YAMNet](https://www.tensorflow.org/hub/tutorials/yamnet) via MediaPipe, bundled with the app. If the model cannot load, it uses an on-device acoustic detector. It ignores coughs when a cough scores higher than a sneeze, waits a few seconds between blessings, and never writes audio to disk.
+ach000 prefers [YAMNet](https://www.tensorflow.org/hub/tutorials/yamnet) via MediaPipe, bundled with the app. If the model cannot load, it uses an on-device acoustic detector. It ignores coughs when a cough scores higher than a sneeze, waits a few seconds between blessings, and never writes audio to disk.
 
 Classifier backends live under `src/detection/` behind a small `SneezeClassifying` contract so another on-device engine can be added later.

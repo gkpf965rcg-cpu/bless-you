@@ -3,77 +3,76 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bless You — a tiny Mac app that hears sneezes</title>
+  <title>ach000 — you sneeze, it says bless you</title>
   <meta name="description" content="A Mac menu bar app that listens for sneezes and says bless you. Audio never leaves your computer.">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
+  <link rel="icon" href="./logo.svg" type="image/svg+xml">
   <link rel="icon" href="./icon.png">
-  <link rel="stylesheet" href="./fonts.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="glow" aria-hidden="true"></div>
-  <header class="top">
-    <img class="mark" src="./icon.png" alt="Bless You icon">
-    <span>Bless You</span>
-  </header>
+  <div class="page">
+    <header class="top">
+      <a class="brand" href="./">
+        <img class="mark" src="./logo.svg" alt="">
+        <span class="wordmark">ach000</span>
+      </a>
+      <a class="nav-link" href="./app/">Open in browser</a>
+    </header>
 
-  <main>
-    <p class="eyebrow">For Mac · Always on · On-device</p>
-    <h1>You sneeze.<br>It says bless you.</h1>
-    <p class="lede">
-      A tiny menu bar app that listens while you work. When it hears a sneeze,
-      it says <em>bless you</em>. That is all it does.
-    </p>
-    <div class="actions">
-      <a class="download" href="./downloads/BlessYou.dmg" download>Download for Mac</a>
-      <p class="meta">macOS 14 or later · Free · Microphone stays on your Mac</p>
-      <p class="checksum" id="checksum" hidden></p>
-      <p class="alt-links">
-        <a href="./app/">Open in browser</a>
-        <a href="./privacy.html">Privacy</a>
+    <main>
+      <p class="eyebrow">For Mac</p>
+      <h1 class="title">ach000</h1>
+      <p class="tagline">You sneeze.<br>It says bless you.</p>
+      <p class="lede">
+        A tiny menu bar app that listens while you work. When it hears a sneeze,
+        it says <em>bless you</em>. That is all it does.
       </p>
-    </div>
+      <div class="actions">
+        <a class="download" href="./downloads/BlessYou.dmg">Download for Mac</a>
+        <p class="meta">macOS 14 or later · Free · Microphone stays on your Mac</p>
+      </div>
 
-    <ol class="steps">
-      <li>
-        <strong>Download</strong>
-        <span>Get the disk image from this page over HTTPS.</span>
-      </li>
-      <li>
-        <strong>Install</strong>
-        <span>Open it and drag Bless You into Applications.</span>
-      </li>
-      <li>
-        <strong>Allow the mic</strong>
-        <span>Open the app, then allow microphone access when asked.</span>
-      </li>
-      <li>
-        <strong>Sneeze</strong>
-        <span>Look for the mic in your menu bar. It keeps listening.</span>
-      </li>
-    </ol>
+      <ol class="steps">
+        <li>
+          <strong>Download</strong>
+          <span>Get the disk image from this page over HTTPS.</span>
+        </li>
+        <li>
+          <strong>Install</strong>
+          <span>Open it and drag ach000 into Applications.</span>
+        </li>
+        <li>
+          <strong>Allow the mic</strong>
+          <span>Open the app, then allow microphone access when asked.</span>
+        </li>
+        <li>
+          <strong>Sneeze</strong>
+          <span>Look for the mic in your menu bar. It keeps listening.</span>
+        </li>
+      </ol>
 
-    <section class="fineprint">
-      <h2>How it tells a sneeze from everything else</h2>
-      <p>
-        Bless You classifies sound on your Mac. It uses Google’s YAMNet
-        model when available — labels that include sneeze and cough — and
-        falls back to an on-device acoustic detector if the model cannot load.
-        Nothing is recorded. Nothing is uploaded. The app has no network access.
-      </p>
-      <p>
-        It is not perfect. A very theatrical fake sneeze may work. A quiet
-        smothered one might not. Drag the sensitivity slider in the menu bar
-        if it is too eager or too shy.
-      </p>
-    </section>
-  </main>
+      <section class="fineprint">
+        <h2>How it tells a sneeze from everything else</h2>
+        <p>
+          ach000 classifies sound on your Mac. It uses Google’s YAMNet
+          model when available — labels that include sneeze and cough — and
+          falls back to an on-device acoustic detector if the model cannot load.
+          Nothing is recorded. Nothing is uploaded. The app has no network access.
+        </p>
+        <p>
+          It is not perfect. A very theatrical fake sneeze may work. A quiet
+          smothered one might not. Drag the sensitivity slider in the menu bar
+          if it is too eager or too shy.
+        </p>
+      </section>
+    </main>
 
-  <footer>
-    <p>Audio is classified on your Mac and discarded immediately.</p>
-    <p><a href="./privacy.html">Privacy</a> · v1 is macOS only</p>
-  </footer>
-  <script src="./landing.js"></script>
+    <footer>
+      <p>Audio is classified on your Mac and discarded immediately.</p>
+      <p><a href="./privacy.html">Privacy</a> · <a href="./feedback.html">Feedback</a> · macOS only</p>
+    </footer>
+  </div>
 </body>
 </html>

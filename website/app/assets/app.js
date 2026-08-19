@@ -2552,18 +2552,18 @@ registerProcessor("capture-processor", CaptureProcessor);
   }
   function microphoneHelp(os = getRuntime().os) {
     if (os === "darwin") {
-      return "Allow the microphone in System Settings so Bless You can hear a sneeze.";
+      return "Allow the microphone in System Settings so ach000 can hear a sneeze.";
     }
     if (os === "win32") {
-      return "Allow the microphone in Windows Settings so Bless You can hear a sneeze.";
+      return "Allow the microphone in Windows Settings so ach000 can hear a sneeze.";
     }
     if (os === "linux") {
-      return "Allow the microphone in your system sound settings so Bless You can hear a sneeze.";
+      return "Allow the microphone in your system sound settings so ach000 can hear a sneeze.";
     }
     if (os === "android" || os === "chromeos") {
-      return "Allow the microphone when asked, and keep this screen open so Bless You can keep listening.";
+      return "Allow the microphone when asked, and keep this screen open so ach000 can keep listening.";
     }
-    return "Allow the microphone when your browser asks so Bless You can hear a sneeze.";
+    return "Allow the microphone when your browser asks so ach000 can hear a sneeze.";
   }
   function microphoneButtonLabel(os = getRuntime().os) {
     if (os === "darwin") return "Open Microphone Settings";
@@ -2646,7 +2646,7 @@ registerProcessor("capture-processor", CaptureProcessor);
     sneezeCount: "sneezeCount",
     micKnown: "micKnown"
   };
-  var MIC_EXPLAIN = "Bless You listens with the microphone so it can hear a sneeze and say bless you. Audio stays on this device and is never recorded, stored, or uploaded.";
+  var MIC_EXPLAIN = "ach000 listens with the microphone so it can hear a sneeze and say bless you. Audio stays on this device and is never recorded, stored, or uploaded.";
   var COOLDOWN = 3;
   var DEFAULT_SENSITIVITY = 0.55;
   var state = {
