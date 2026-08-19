@@ -93,12 +93,26 @@ main {
 }
 
 .title {
+  display: flex;
+  align-items: center;
+  gap: 0.06em;
   margin: 0 0 18px;
   font-family: "Arial Black", "Arial Bold", Arial, Helvetica, sans-serif;
   font-size: clamp(3.2rem, 14vw, 7rem);
   font-weight: 900;
   line-height: 0.9;
   letter-spacing: -0.05em;
+}
+
+.sneeze-mark {
+  display: block;
+  flex: 0 0 auto;
+  width: auto;
+  height: 0.8em;
+  overflow: visible;
+  color: var(--ink);
+  transform: translateY(0.03em);
+  pointer-events: none;
 }
 
 .tagline {
@@ -110,11 +124,16 @@ main {
 }
 
 .lede {
-  max-width: 38rem;
   margin: 0 0 32px;
   color: var(--muted);
   font-size: 1.08rem;
   line-height: 1.55;
+}
+
+@media (min-width: 880px) {
+  .lede {
+    white-space: nowrap;
+  }
 }
 
 .actions {
