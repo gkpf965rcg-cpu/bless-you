@@ -22,6 +22,16 @@ await esbuild.build({
   minify: false
 });
 
+await esbuild.build({
+  entryPoints: [join(root, "src", "web-bless.js")],
+  bundle: true,
+  outfile: join(root, "website", "bless.js"),
+  format: "iife",
+  platform: "browser",
+  target: ["es2020"],
+  minify: false
+});
+
 if (existsSync(wasmSrc)) {
   mkdirSync(wasmDest, { recursive: true });
   cpSync(wasmSrc, wasmDest, { recursive: true });
@@ -40,3 +50,4 @@ if (existsSync(fetchModel)) {
 }
 
 console.log("Built website/app/assets/app.js");
+console.log("Built website/bless.js");

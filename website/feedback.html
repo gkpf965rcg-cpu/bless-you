@@ -18,23 +18,21 @@
 <body>
   <div class="page">
     <header class="top">
-      <a class="brand" href="./">
-        <img class="mark" src="./logo.svg" alt="">
+      <a class="brand" id="back" href="./" aria-label="Back">
+        <svg class="back-arrow" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M20 12H5M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
         <span class="wordmark">ach000</span>
       </a>
-      <a class="nav-link" href="./app/">Open in browser</a>
+      <button type="button" class="nav-link" data-bless>bless me</button>
     </header>
 
     <main>
-      <p class="eyebrow">Feedback</p>
       <h1>Feedback</h1>
       <form class="feedback-form" id="feedback-form" method="post" action="/api/feedback" novalidate>
+        <textarea name="message" id="message" maxlength="2000" required placeholder="Tell us what you think…" aria-label="Message"></textarea>
         <label>
-          Message
-          <textarea name="message" id="message" maxlength="2000" required placeholder="Tell us what you think…"></textarea>
-        </label>
-        <label>
-          Email <span class="hint">(optional, only if you want a reply)</span>
+          <span>Email <span class="hint">if you want a reply</span></span>
           <input type="email" name="email" id="email" maxlength="254" autocomplete="email" placeholder="you@example.com">
         </label>
         <div class="hp" aria-hidden="true">
@@ -42,11 +40,12 @@
             <input type="text" name="company" id="company" tabindex="-1" autocomplete="off">
           </label>
         </div>
-        <button type="submit" id="submit">Send feedback</button>
+        <button type="submit" id="submit">Send</button>
       </form>
       <p class="status" id="status" hidden></p>
     </main>
   </div>
+  <script src="./bless.js"></script>
   <script src="./feedback.js"></script>
 </body>
 </html>

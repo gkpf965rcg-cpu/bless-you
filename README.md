@@ -6,17 +6,12 @@ Version 1 is **macOS only**. Detection is modular so a Windows port can be added
 
 ## Download and install
 
-Host the `website/` folder over **HTTPS**, then:
+1. Download `ach000-mac.dmg` from [ach000.com](https://www.ach000.com).
+2. Open the disk image and drag **ach000** into **Applications**.
+3. Open ach000 and allow the microphone when asked.
+4. Look for the a in the menu bar.
 
-1. Download `BlessYou.dmg`.
-2. Optional: check the SHA-256 on the download page against `shasum -a 256 BlessYou.dmg`.
-3. Open the disk image and drag **ach000** into **Applications**.
-4. Open ach000 and allow the microphone when asked.
-5. Look for the a in the menu bar.
-
-Notarized Developer ID builds open normally in Gatekeeper. If you built from source without signing credentials, macOS may warn that the app is from an unidentified developer.
-
-The app does not update itself. Download a new signed disk image from the website when you want a newer version.
+The public file is a Developer ID signed, notarised disk image. The app does not update itself; download a new disk image when you want a newer version.
 
 ## Privacy
 
@@ -32,38 +27,24 @@ See [website/privacy.html](website/privacy.html).
 Requires macOS 14+, Node.js 18+, and Xcode command line tools.
 
 ```bash
-chmod +x scripts/*.sh
 npm install
-./scripts/build.sh --install
-./scripts/serve-website.sh
+npm start
 ```
 
-Then open [http://127.0.0.1:8787](http://127.0.0.1:8787) (loopback only) or launch **ach000** from Applications.
+Local source builds are for development. They are not signed for other Macs.
 
-Local preview uses HTTP on `127.0.0.1`. Public downloads must be served over HTTPS.
+### Public Mac release
 
-### Signed public release
-
-You need an Apple Developer Program membership and a **Developer ID Application** certificate.
+You need an Apple Developer Program membership, a **Developer ID Application** certificate in Keychain, and notarytool credentials.
 
 ```bash
-export CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-# One of:
-export NOTARYTOOL_PROFILE="notarytool-profile"
-# or
-export APPLE_ID="you@example.com"
-export APPLE_APP_SPECIFIC_PASSWORD="app-specific-password"
-export APPLE_TEAM_ID="TEAMID"
-# or App Store Connect API key:
-# export APPLE_API_KEY="/path/to/AuthKey_XXXXXXXXXX.p8"
-# export APPLE_API_KEY_ID="XXXXXXXXXX"
-# export APPLE_API_ISSUER="issuer-uuid"
-
-./scripts/build.sh
-./scripts/audit-release.sh
+npm run release:mac:check
+npm run release:mac
 ```
 
-Without `CODESIGN_IDENTITY`, the build is ad-hoc signed and **not for public download**.
+That command builds a universal app, signs it with Developer ID Application, notarises it with `xcrun notarytool`, staples the ticket, verifies Gatekeeper, writes `dist/ach000-mac.dmg`, and uploads that file to the GitHub release that [ach000.com](https://www.ach000.com) serves.
+
+Do not distribute `npm run build` output. That path is local-only and may be ad-hoc signed.
 
 ## How sneeze detection works
 

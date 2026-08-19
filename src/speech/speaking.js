@@ -5,6 +5,10 @@
  */
 const UTTERANCE = "Bless you.";
 
+// Chrome may garbage-collect the utterance if nothing in JS holds it.
+let currentUtterance = null;
+let speakTimer = 0;
+
 function preferredVoice() {
   const voices = speechSynthesis.getVoices?.() || [];
   const preferred = [
@@ -30,10 +34,7 @@ function preferredVoice() {
   );
 }
 
-function speakInBrowser() {
-  if (!("speechSynthesis" in window)) return false;
-
-  speechSynthesis.cancel();
+function queueUtterance() {
   const utterance = new SpeechSynthesisUtterance(UTTERANCE);
   utterance.rate = 0.93;
   utterance.pitch = 1.04;
@@ -44,16 +45,38 @@ function speakInBrowser() {
   } else {
     utterance.lang = "en-GB";
   }
+  currentUtterance = utterance;
+  try {
+    speechSynthesis.resume();
+  } catch {
+    // Ignore.
+  }
   speechSynthesis.speak(utterance);
+}
+
+function speakInBrowser() {
+  if (!("speechSynthesis" in window)) return false;
+
+  window.clearTimeout(speakTimer);
+
+  // Chrome drops speak() when it runs in the same turn as cancel().
+  // Only interrupt a blessing we started — a stuck speaking flag
+  // should not delay the first click past the user gesture.
+  if (currentUtterance && (speechSynthesis.speaking || speechSynthesis.pending)) {
+    speechSynthesis.cancel();
+    speakTimer = window.setTimeout(queueUtterance, 50);
+    return true;
+  }
+
+  queueUtterance();
   return true;
 }
 
 export function speakBlessYou() {
-  const voices = speechSynthesis.getVoices?.() || [];
-  if (voices.length === 0 && window.blessyou?.speak) {
-    window.blessyou.speak(UTTERANCE).then((ok) => {
-      if (!ok) speakInBrowser();
-    });
+  // Native TTS is Linux-only. Speak in this turn everywhere else so a
+  // click still counts as a user gesture (Safari / Chrome / Mac app).
+  if (window.blessyou?.platform === "linux" && window.blessyou.speak) {
+    window.blessyou.speak(UTTERANCE);
     return;
   }
   if (!speakInBrowser() && window.blessyou?.speak) {

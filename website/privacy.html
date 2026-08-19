@@ -6,7 +6,7 @@
   <title>Privacy — ach000</title>
   <meta name="description" content="ach000 does not collect personal data. Microphone audio is classified on your device and never stored or uploaded.">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
   <link rel="icon" href="./logo.svg" type="image/svg+xml">
   <link rel="icon" href="./icon.png" sizes="1024x1024" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -22,7 +22,7 @@
         <img class="mark" src="./logo.svg" alt="">
         <span class="wordmark">ach000</span>
       </a>
-      <a class="nav-link" href="./app/">Open in browser</a>
+      <button type="button" class="nav-link" data-bless>bless me</button>
     </header>
 
     <main>
@@ -63,5 +63,6 @@
       </section>
     </main>
   </div>
+  <script src="./bless.js"></script>
 </body>
 </html>

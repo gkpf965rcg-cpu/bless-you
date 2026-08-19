@@ -9,8 +9,11 @@
   "scripts": {
     "start": "npm run build:app && electron .",
     "build:app": "node scripts/build-app.mjs",
-    "build": "npm run build:app && electron-builder --mac",
-    "build:current": "npm run build:app && electron-builder --mac",
+    "build": "bash scripts/build.sh",
+    "build:current": "bash scripts/build.sh",
+    "release:mac": "bash scripts/release-mac.sh",
+    "release:mac:check": "bash scripts/release-mac.sh --check",
+    "release:mac:finish": "bash scripts/release-mac.sh --finish",
     "web": "npm run build:app && python3 -m http.server --bind 127.0.0.1 --directory website 8787"
   },
   "dependencies": {
@@ -24,7 +27,8 @@
   "build": {
     "appId": "app.ach000.desktop",
     "productName": "ach000",
-    "artifactName": "BlessYou-${os}.${ext}",
+    "artifactName": "ach000-${os}.${ext}",
+    "afterSign": "scripts/after-sign.cjs",
     "afterAllArtifactBuild": "scripts/notarize.cjs",
     "directories": {
       "output": "dist",
@@ -42,9 +46,12 @@
       "icon": "build/icon.png",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "preAutoEntitlements": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "notarize": false,
+      "type": "distribution",
+      "minimumSystemVersion": "14.0",
       "target": [
         {
           "target": "dmg",
@@ -76,7 +83,8 @@
       "shortcutName": "ach000"
     },
     "dmg": {
-      "title": "ach000"
+      "title": "ach000",
+      "sign": true
     }
   }
 }

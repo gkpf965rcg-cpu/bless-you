@@ -8,6 +8,13 @@ dist/
 .env
 .env.*
 !.env.example
+electron-builder.env
+certificates/
+*.p12
+*.p8
+*.cer
+*.certSigningRequest
+AuthKey_*.p8
 website/app/wasm/
 website/app/models/*.tflite
 website/app/fonts/
@@ -15,4 +22,5 @@ website/downloads/*.dmg
 website/downloads/*.zip
 website/downloads/*.exe
 website/downloads/*.AppImage
+website/downloads/SHA256SUMS
 *.map

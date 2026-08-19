@@ -2811,6 +2811,8 @@ registerProcessor("capture-processor", CaptureProcessor);
 
   // src/speech/speaking.js
   var UTTERANCE = "Bless you.";
+  var currentUtterance = null;
+  var speakTimer = 0;
   function preferredVoice() {
     const voices = speechSynthesis.getVoices?.() || [];
     const preferred = [
@@ -2829,9 +2831,7 @@ registerProcessor("capture-processor", CaptureProcessor);
     }
     return voices.find((voice) => voice.lang?.toLowerCase().startsWith("en-gb")) || voices.find((voice) => voice.lang?.toLowerCase().startsWith("en")) || null;
   }
-  function speakInBrowser() {
-    if (!("speechSynthesis" in window)) return false;
-    speechSynthesis.cancel();
+  function queueUtterance() {
     const utterance = new SpeechSynthesisUtterance(UTTERANCE);
     utterance.rate = 0.93;
     utterance.pitch = 1.04;
@@ -2842,15 +2842,27 @@ registerProcessor("capture-processor", CaptureProcessor);
     } else {
       utterance.lang = "en-GB";
     }
+    currentUtterance = utterance;
+    try {
+      speechSynthesis.resume();
+    } catch {
+    }
     speechSynthesis.speak(utterance);
+  }
+  function speakInBrowser() {
+    if (!("speechSynthesis" in window)) return false;
+    window.clearTimeout(speakTimer);
+    if (currentUtterance && (speechSynthesis.speaking || speechSynthesis.pending)) {
+      speechSynthesis.cancel();
+      speakTimer = window.setTimeout(queueUtterance, 50);
+      return true;
+    }
+    queueUtterance();
     return true;
   }
   function speakBlessYou() {
-    const voices = speechSynthesis.getVoices?.() || [];
-    if (voices.length === 0 && window.blessyou?.speak) {
-      window.blessyou.speak(UTTERANCE).then((ok) => {
-        if (!ok) speakInBrowser();
-      });
+    if (window.blessyou?.platform === "linux" && window.blessyou.speak) {
+      window.blessyou.speak(UTTERANCE);
       return;
     }
     if (!speakInBrowser() && window.blessyou?.speak) {
