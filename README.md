@@ -12,7 +12,7 @@ Host the `website/` folder over **HTTPS**, then:
 2. Optional: check the SHA-256 on the download page against `shasum -a 256 BlessYou.dmg`.
 3. Open the disk image and drag **ach000** into **Applications**.
 4. Open ach000 and allow the microphone when asked.
-5. Look for the microphone icon in the menu bar.
+5. Look for the a in the menu bar.
 
 Notarized Developer ID builds open normally in Gatekeeper. If you built from source without signing credentials, macOS may warn that the app is from an unidentified developer.
 

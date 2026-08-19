@@ -64,46 +64,69 @@ def dist_to_segment(px, py, ax, ay, bx, by):
     return math.hypot(px - (ax + abx * t), py - (ay + aby * t))
 
 
-def render_letter_a(size):
-    """White square, black capital A. Used if the macOS Arial Black renderer is unavailable."""
+def render_letter_a(size, color=(0, 0, 0), transparent=False, background=(255, 255, 255)):
+    """Double-story lowercase a fallback if the macOS Arial Black renderer is unavailable."""
     pixels = bytearray(size * size * 4)
+    fill = b"\x00\x00\x00\x00" if transparent else bytes([*background, 255])
     for i in range(0, len(pixels), 4):
-        pixels[i : i + 4] = b"\xff\xff\xff\xff"
-    left = (size * 0.16, size * 0.84)
-    right = (size * 0.84, size * 0.84)
-    peak = (size * 0.5, size * 0.16)
-    bar_y = size * 0.58
-    stroke = size * 0.11
-    bar = size * 0.08
+        pixels[i : i + 4] = fill
+    ink = bytes([*color, 255])
+    stem_x0, stem_x1 = size * 0.60, size * 0.78
+    stem_y0, stem_y1 = size * 0.18, size * 0.86
     for y in range(size):
         for x in range(size):
-            px, py = x + 0.5, y + 0.5
-            in_a = (
-                dist_to_segment(px, py, peak[0], peak[1], left[0], left[1]) <= stroke
-                or dist_to_segment(px, py, peak[0], peak[1], right[0], right[1]) <= stroke
-                or (
-                    dist_to_segment(px, py, size * 0.30, bar_y, size * 0.70, bar_y) <= bar
-                    and py > size * 0.42
-                )
-            )
-            if in_a:
+            px, py = (x + 0.5) / size, (y + 0.5) / size
+            bowl = ((px - 0.42) / 0.30) ** 2 + ((py - 0.62) / 0.24) ** 2 <= 1
+            bowl_hole = ((px - 0.40) / 0.13) ** 2 + ((py - 0.62) / 0.11) ** 2 <= 1
+            upper = ((px - 0.46) / 0.24) ** 2 + ((py - 0.34) / 0.18) ** 2 <= 1
+            upper_hole = ((px - 0.45) / 0.10) ** 2 + ((py - 0.34) / 0.08) ** 2 <= 1
+            stem = stem_x0 <= x + 0.5 <= stem_x1 and stem_y0 <= y + 0.5 <= stem_y1
+            if (bowl and not bowl_hole) or (upper and not upper_hole) or stem:
                 idx = (y * size + x) * 4
-                pixels[idx : idx + 4] = b"\x00\x00\x00\xff"
+                pixels[idx : idx + 4] = ink
     return pixels
 
 
-def write_letter_a_png(path, size):
+def write_letter_a_png(path, size, color=(0, 0, 0), transparent=False, background=(255, 255, 255)):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     swift = os.path.join(ROOT, "scripts", "render-a-icon.swift")
     if os.path.isfile(swift):
         import subprocess
+        import tempfile
 
+        raw_fd, raw_path = tempfile.mkstemp(suffix=".rgba")
+        os.close(raw_fd)
+        command = ["swift", swift, str(size), raw_path]
+        if transparent:
+            command.append("--transparent")
+        else:
+            command.extend(["--background", f"{background[0]},{background[1]},{background[2]}"])
+        if color != (0, 0, 0):
+            command.extend(["--color", f"{color[0]},{color[1]},{color[2]}"])
         try:
-            subprocess.run(["swift", swift, str(size), path], check=True, capture_output=True)
-            return
-        except (OSError, subprocess.CalledProcessError):
+            subprocess.run(command, check=True, capture_output=True)
+            with open(raw_path, "rb") as handle:
+                pixels = handle.read()
+            if len(pixels) == size * size * 4:
+                write_png(path, size, size, pixels)
+                return
+        except subprocess.CalledProcessError as error:
+            detail = (error.stderr or error.stdout or b"").decode("utf-8", "replace").strip()
+            if detail:
+                print(detail, file=sys.stderr)
+        except OSError:
             pass
-    write_png(path, size, size, render_letter_a(size))
+        finally:
+            try:
+                os.unlink(raw_path)
+            except OSError:
+                pass
+    write_png(
+        path,
+        size,
+        size,
+        render_letter_a(size, color=color, transparent=transparent, background=background),
+    )
 
 
 def resize_png(src, dest, size):
@@ -147,32 +170,6 @@ def downsample(pixels, src, dest):
     return out
 
 
-def render_mic(size, color, filled_bg=None):
-    pixels = bytearray(size * size * 4)
-    if filled_bg:
-        for i in range(0, len(pixels), 4):
-            pixels[i : i + 4] = bytes([*filled_bg, 255])
-    cx, cy = size / 2.0, size * 0.42
-    cap_w, cap_h = size * 0.22, size * 0.28
-    for y in range(size):
-        for x in range(size):
-            nx = x + 0.5
-            ny = y + 0.5
-            dx = (nx - cx) / cap_w
-            dy = (ny - cy) / cap_h
-            capsule = dx * dx + dy * dy <= 1.0 and ny < cy + cap_h
-            stem = abs(nx - cx) < size * 0.05 and cy + cap_h * 0.6 < ny < size * 0.78
-            base = abs(nx - cx) < size * 0.18 and abs(ny - size * 0.82) < size * 0.05
-            bow = False
-            if ny > cy:
-                arc = math.hypot(nx - cx, ny - (cy + cap_h * 0.15))
-                bow = size * 0.28 < arc < size * 0.36 and ny < size * 0.72
-            if capsule or stem or base or bow:
-                idx = (y * size + x) * 4
-                pixels[idx : idx + 4] = bytes([*color, 255])
-    return pixels
-
-
 def write_ico(path, images):
     count = len(images)
     header = struct.pack("<HHH", 0, 1, count)
@@ -202,8 +199,10 @@ def main():
     import shutil
     import tempfile
 
+    paper = (246, 239, 228)
+    ink = (17, 17, 17)
     master = os.path.join(ROOT, "website", "icon.png")
-    write_letter_a_png(master, 512)
+    write_letter_a_png(master, 1024, color=ink, background=paper)
     for dest in (
         os.path.join(ROOT, "website", "app", "icon.png"),
         os.path.join(ROOT, "build", "icon.png"),
@@ -211,22 +210,25 @@ def main():
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copyfile(master, dest)
 
-    resize_png(master, os.path.join(ROOT, "website", "app", "apple-touch-icon.png"), 180)
+    for dest in (
+        os.path.join(ROOT, "website", "apple-touch-icon.png"),
+        os.path.join(ROOT, "website", "app", "apple-touch-icon.png"),
+    ):
+        write_letter_a_png(dest, 180, color=ink, background=paper)
 
     ico_images = []
     with tempfile.TemporaryDirectory() as tmp:
         for size in (16, 32, 48, 256):
             scaled = os.path.join(tmp, f"{size}.png")
-            resize_png(master, scaled, size)
+            write_letter_a_png(scaled, size, color=ink, background=paper)
             with open(scaled, "rb") as handle:
                 ico_images.append((size, size, handle.read()))
     write_ico(os.path.join(ROOT, "build", "icon.ico"), ico_images)
 
-    mic_template = render_mic(32, (0, 0, 0))
-    mic_color = render_mic(32, (196, 92, 38))
-    write_png(os.path.join(ROOT, "website", "app", "icons", "trayTemplate.png"), 32, 32, mic_template)
-    write_png(os.path.join(ROOT, "website", "app", "icons", "trayTemplate@2x.png"), 32, 32, mic_template)
-    write_png(os.path.join(ROOT, "website", "app", "icons", "tray.png"), 32, 32, mic_color)
+    icons = os.path.join(ROOT, "website", "app", "icons")
+    write_letter_a_png(os.path.join(icons, "trayTemplate.png"), 22, transparent=True)
+    write_letter_a_png(os.path.join(icons, "trayTemplate@2x.png"), 44, transparent=True)
+    write_letter_a_png(os.path.join(icons, "tray.png"), 32, color=ink, transparent=True)
 
     print("Wrote app and tray icons")
     return 0
