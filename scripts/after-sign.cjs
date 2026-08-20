@@ -4,6 +4,7 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const notarize = require("./notarize.cjs");
+const { entitlementProblems } = require("./entitlements-policy.cjs");
 
 function runCapture(command, args) {
   const result = spawnSync(command, args, { encoding: "utf8" });
@@ -50,37 +51,20 @@ function verifyBundle(appPath) {
   }
 }
 
-function assertDeveloperIdEntitlements(appPath) {
-  const xml = entitlementsXml(appPath);
-  if (!xml) {
-    fail(`no entitlements on ${appPath}`);
-  }
-  if (!xml.includes("com.apple.security.app-sandbox")) {
-    fail("App Sandbox is missing");
-  }
-  if (!xml.includes("com.apple.security.device.audio-input")) {
-    fail("microphone entitlement is missing");
-  }
-  if (/get-task-allow/.test(xml)) {
-    fail("get-task-allow must not be set on a public build");
-  }
-  // These require a provisioning profile. On macOS 26, AMFI refuses to spawn a
-  // Developer ID app that carries them without one (RBS/POSIX error 163 →
-  // "The application can't be opened").
-  if (/com\.apple\.security\.application-groups/.test(xml)) {
-    fail("application-groups is not allowed on this Developer ID build", xml);
-  }
-  if (/com\.apple\.application-identifier/.test(xml)) {
-    fail("application-identifier is not allowed on this Developer ID build", xml);
+function assertSafeEntitlements(target) {
+  const xml = entitlementsXml(target);
+  const problems = entitlementProblems(xml);
+  if (problems.length) {
+    fail(`${target} entitlements are not safe for a public Developer ID build`, `${problems.join("\n")}\n${xml}`);
   }
 }
 
-function assertHelperInherit(appPath) {
-  const helper = path.join(appPath, "Contents/Frameworks/ach000 Helper.app");
-  if (!fs.existsSync(helper)) return;
-  const xml = entitlementsXml(helper);
-  if (!xml.includes("com.apple.security.app-sandbox") || !xml.includes("com.apple.security.inherit")) {
-    fail("helper apps must use App Sandbox inherit entitlements", xml);
+function eachHelperApp(appPath, fn) {
+  const frameworks = path.join(appPath, "Contents/Frameworks");
+  if (!fs.existsSync(frameworks)) return;
+  for (const name of fs.readdirSync(frameworks)) {
+    if (!name.endsWith(".app")) continue;
+    fn(path.join(frameworks, name));
   }
 }
 
@@ -130,8 +114,8 @@ module.exports = async function afterSign(context) {
     fail("bundle identifier is not app.ach000.desktop", info);
   }
 
-  assertDeveloperIdEntitlements(appPath);
-  assertHelperInherit(appPath);
+  assertSafeEntitlements(appPath);
+  eachHelperApp(appPath, assertSafeEntitlements);
   verifyBundle(appPath);
   console.log(`afterSign: verified Developer ID + Hardened Runtime for ${appPath}`);
 

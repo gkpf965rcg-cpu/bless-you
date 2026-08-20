@@ -7,6 +7,7 @@ const { execFile } = require("child_process");
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+let ignoreBlurUntil = 0;
 
 const APP_HTML = path.join(__dirname, "..", "website", "app", "index.html");
 const MIC_EXPLAIN_DETAIL =
@@ -69,6 +70,7 @@ function createWindow() {
 
   mainWindow.on("blur", () => {
     if (process.platform !== "linux" && app.isPackaged) {
+      if (Date.now() < ignoreBlurUntil) return;
       mainWindow.hide();
     }
   });
@@ -81,9 +83,23 @@ function createWindow() {
   });
 }
 
+function trayAnchor() {
+  const { screen } = require("electron");
+  const bounds = tray ? tray.getBounds() : { x: 0, y: 0, width: 0, height: 0 };
+  if (bounds.width > 0 && bounds.height > 0) return bounds;
+  const area = screen.getPrimaryDisplay().workArea;
+  if (process.platform === "darwin") {
+    return { x: area.x + area.width - 22, y: area.y, width: 22, height: 22 };
+  }
+  if (process.platform === "win32") {
+    return { x: area.x + area.width - 22, y: area.y + area.height - 22, width: 22, height: 22 };
+  }
+  return { x: area.x + 8, y: area.y + 8, width: 22, height: 22 };
+}
+
 function positionWindow() {
-  if (!tray || !mainWindow) return;
-  const trayBounds = tray.getBounds();
+  if (!mainWindow) return;
+  const trayBounds = trayAnchor();
   const winBounds = mainWindow.getBounds();
   let x = Math.round(trayBounds.x + trayBounds.width / 2 - winBounds.width / 2);
   let y;
@@ -104,15 +120,34 @@ function positionWindow() {
   mainWindow.setPosition(x, y);
 }
 
+function revealPanel() {
+  if (!mainWindow) return;
+  ignoreBlurUntil = Date.now() + 1500;
+  positionWindow();
+  mainWindow.show();
+  mainWindow.focus();
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
+    positionWindow();
+  }, 250);
+}
+
 function toggleWindow() {
   if (!mainWindow) return;
   if (mainWindow.isVisible()) {
     mainWindow.hide();
     return;
   }
-  positionWindow();
-  mainWindow.show();
-  mainWindow.focus();
+  revealPanel();
+}
+
+function launchedFromLoginItem() {
+  if (process.platform !== "darwin") return false;
+  try {
+    return Boolean(app.getLoginItemSettings().wasOpenedAtLogin);
+  } catch {
+    return false;
+  }
 }
 
 function createTray() {
@@ -129,7 +164,7 @@ function createTray() {
   tray.on("click", toggleWindow);
   tray.on("right-click", () => {
     const menu = Menu.buildFromTemplate([
-      { label: "Open ach000", click: () => { positionWindow(); mainWindow?.show(); } },
+      { label: "Open ach000", click: () => { revealPanel(); } },
       { label: "Quit", click: () => { isQuitting = true; app.quit(); } }
     ]);
     tray.popUpContextMenu(menu);
@@ -244,11 +279,7 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", () => {
-    if (mainWindow) {
-      positionWindow();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    revealPanel();
   });
 
   app.whenReady().then(() => {
@@ -258,10 +289,10 @@ if (!gotLock) {
     }
     createWindow();
     createTray();
+    if (!launchedFromLoginItem()) {
+      revealPanel();
+    }
     if (!app.isPackaged) {
-      positionWindow();
-      mainWindow?.show();
-      mainWindow?.focus();
       console.log("ach000 is running locally. The panel should be on screen; there is also an a in the menu bar.");
     }
 

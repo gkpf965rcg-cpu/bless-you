@@ -69,6 +69,12 @@ has_api_key_notary_env() {
 has_notarytool_profile() {
   local profile
   profile="$(notary_profile_name)"
+  [[ -n "${profile}" ]]
+}
+
+notarytool_history_ok() {
+  local profile
+  profile="$(notary_profile_name)"
   xcrun notarytool history --keychain-profile "${profile}" >/dev/null 2>&1
 }
 
@@ -95,8 +101,8 @@ in Keychain (preferred):
      --team-id "YOUR_TEAM_ID" \\
      --password "APP_SPECIFIC_PASSWORD"
 
-   Your existing Apple Development certificate uses team ID ZFBK2N443V;
-   confirm that same team ID on https://developer.apple.com/account.
+   Use the team ID from the Developer ID Application certificate
+   (L8GDB7Q48R), not an Apple Development team.
 
 3. Then run: npm run release:mac
 

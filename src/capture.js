@@ -13,11 +13,11 @@ class CaptureProcessor extends AudioWorkletProcessor {
 registerProcessor("capture-processor", CaptureProcessor);
 `;
 
-const PREFERRED_AUDIO = {
-  echoCancellation: { ideal: true },
-  noiseSuppression: { ideal: false },
-  autoGainControl: { ideal: false },
-  channelCount: { ideal: 1 }
+const RAW_MIC = {
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+  channelCount: 1
 };
 
 function audioContextConstructor() {
@@ -174,17 +174,26 @@ export class MicCapture {
   }
 
   async _openMicrophone() {
-    try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: PREFERRED_AUDIO,
-        video: false
-      });
-    } catch (error) {
-      if (error?.name === "OverconstrainedError" || error?.name === "ConstraintNotSatisfiedError") {
-        console.warn("Microphone constraints not supported; retrying with defaults");
-        return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    const attempts = [
+      RAW_MIC,
+      { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    ];
+    let lastError = null;
+    for (const audio of attempts) {
+      try {
+        return await navigator.mediaDevices.getUserMedia({ audio, video: false });
+      } catch (error) {
+        lastError = error;
+        if (error?.name !== "OverconstrainedError" && error?.name !== "ConstraintNotSatisfiedError") {
+          throw error;
+        }
       }
-      throw error;
+    }
+    console.warn("Raw microphone constraints not supported; retrying with defaults");
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch (error) {
+      throw lastError || error;
     }
   }
 

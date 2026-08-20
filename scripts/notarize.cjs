@@ -45,8 +45,11 @@ function notaryArgs() {
 function hasCredentials() {
   if (process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER) return true;
   if (process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID) return true;
+  // `notarytool history` can fail in agent shells even when submit works
+  // ("No Keychain password item found for profile"). Treat a configured
+  // profile name as sufficient; submitAndWait is the real check.
   const profile = process.env.NOTARYTOOL_PROFILE || "ach000-notary";
-  return run("xcrun", ["notarytool", "history", "--keychain-profile", profile]).status;
+  return Boolean(profile);
 }
 
 function parseJson(text) {

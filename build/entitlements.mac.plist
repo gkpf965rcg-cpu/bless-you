@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Developer ID / website download only — not Mac App Store.
+  Do not enable com.apple.security.app-sandbox. Electron's V8 JIT
+  crashes on macOS 26 Apple Silicon when sandboxed (EXC_BREAKPOINT in
+  ThreadIsolation), even with allow-jit.
+  https://github.com/electron/electron/issues/49522
+  Chromium renderer sandbox stays on in electron/main.cjs.
+  Network is still blocked there via onBeforeRequest.
+-->
 <plist version="1.0">
 <dict>
-	<key>com.apple.security.app-sandbox</key>
-	<true/>
-	<key>com.apple.security.device.audio-input</key>
-	<true/>
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
