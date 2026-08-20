@@ -38,8 +38,10 @@ require_prereqs() {
   if ! has_notary_credentials; then
     print_missing_notary_help
     ok=0
-  else
+  elif has_apple_id_notary_env || has_api_key_notary_env || notarytool_history_ok; then
     echo "Notarisation credentials: present"
+  else
+    echo "Notarisation: using keychain profile $(notary_profile_name) (history lookup failed in this session; submit will verify)"
   fi
 
   if [[ "${ok}" -eq 1 ]]; then
@@ -183,6 +185,7 @@ fi
 
 echo "Building app assets..."
 npm run build:app
+node "${ROOT}/scripts/check-entitlements.cjs"
 
 echo "Packaging, signing, notarising, and stapling universal Mac app..."
 npx electron-builder --mac -c.mac.forceCodeSigning=true

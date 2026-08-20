@@ -57,37 +57,43 @@ codesign --verify --strict --verbose=2 "${APP_BUNDLE}"
 echo "Verifying ${DMG}"
 codesign --verify --verbose=2 "${DMG}"
 
+node "${ROOT}/scripts/check-entitlements.cjs" || fail "source entitlements files are not safe"
+
+assert_safe_ents() {
+  local label="$1"
+  local xml="$2"
+  local problems=""
+  if ! problems="$(node -e '
+    const { entitlementProblems } = require(process.argv[1]);
+    const fs = require("fs");
+    const xml = fs.readFileSync(0, "utf8");
+    const problems = entitlementProblems(xml);
+    if (problems.length) {
+      console.error(problems.join("\n"));
+      process.exit(1);
+    }
+  ' "${ROOT}/scripts/entitlements-policy.cjs" <<<"${xml}" 2>&1)"; then
+    fail "${label} entitlements are not safe for a public Developer ID build"$'\n'"${problems}"$'\n'"${xml}"
+  fi
+}
+
 ENTITLEMENTS="$(codesign -d --entitlements :- "${APP_BUNDLE}" 2>/dev/null || true)"
-[[ -n "${ENTITLEMENTS}" ]] || fail "no entitlements on ${APP_BUNDLE}"
+assert_safe_ents "${APP_BUNDLE}" "${ENTITLEMENTS}"
 
-echo "${ENTITLEMENTS}" | grep -q "com.apple.security.app-sandbox" || fail "App Sandbox is missing"
-echo "${ENTITLEMENTS}" | grep -q "com.apple.security.device.audio-input" || fail "microphone entitlement is missing"
-
-echo "${ENTITLEMENTS}" | grep -q "get-task-allow" && fail "get-task-allow must not be set on a public build"
-
-if echo "${ENTITLEMENTS}" | grep -Eq "com.apple.security.network.(client|server)|com.apple.security.files|com.apple.security.device.camera|com.apple.security.personal-information"; then
-  fail "entitlements include network, files, camera, or personal-information access"
-fi
-
-# Restricted entitlements need a provisioning profile. Without one, macOS 26
-# refuses to spawn the app (POSIX 163 / "The application can't be opened").
-if echo "${ENTITLEMENTS}" | grep -q "com.apple.security.application-groups"; then
-  fail "application-groups is not allowed on this Developer ID build"
-fi
-if echo "${ENTITLEMENTS}" | grep -q "com.apple.application-identifier"; then
-  fail "application-identifier is not allowed on this Developer ID build"
+if echo "${ENTITLEMENTS}" | grep -Eq "com.apple.security.files|com.apple.security.device.camera|com.apple.security.personal-information"; then
+  fail "entitlements include files, camera, or personal-information access"
 fi
 
 PLIST_EXEC="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "${APP_BUNDLE}/Contents/Info.plist")"
 [[ "${PLIST_EXEC}" == "$(basename "${BINARY}")" ]] || fail "CFBundleExecutable (${PLIST_EXEC}) does not match ${BINARY}"
 [[ -x "${BINARY}" ]] || fail "executable bit is missing on ${BINARY}"
 
-HELPER="${APP_BUNDLE}/Contents/Frameworks/ach000 Helper.app"
-if [[ -d "${HELPER}" ]]; then
+shopt -s nullglob
+for HELPER in "${APP_BUNDLE}/Contents/Frameworks/"*.app; do
   HELPER_ENTS="$(codesign -d --entitlements :- "${HELPER}" 2>/dev/null || true)"
-  echo "${HELPER_ENTS}" | grep -q "com.apple.security.app-sandbox" || fail "helper is missing App Sandbox"
-  echo "${HELPER_ENTS}" | grep -q "com.apple.security.inherit" || fail "helper is missing sandbox inherit"
-fi
+  assert_safe_ents "${HELPER}" "${HELPER_ENTS}"
+done
+shopt -u nullglob
 
 SIGN_INFO="$(codesign_display "${APP_BUNDLE}")"
 echo "${SIGN_INFO}" | grep -q "flags=.*runtime" || fail "Hardened Runtime is missing"
@@ -132,6 +138,14 @@ echo "${SPCTL_Q}" | grep -qi "accepted" || fail "spctl did not accept quarantine
 rm -rf "${QUARANTINE_DIR}"
 
 AUDIT_MOUNT="$(mktemp -d /tmp/ach000-dmg-mnt-XXXXXX)"
+cleanup_audit_mount() {
+  pkill -x ach000 2>/dev/null || true
+  if [[ -n "${AUDIT_MOUNT:-}" && -d "${AUDIT_MOUNT}" ]]; then
+    hdiutil detach "${AUDIT_MOUNT}" -quiet 2>/dev/null || true
+    rmdir "${AUDIT_MOUNT}" 2>/dev/null || true
+  fi
+}
+trap cleanup_audit_mount EXIT
 echo "Mounting ${DMG} at ${AUDIT_MOUNT}"
 hdiutil attach -nobrowse -readonly -mountpoint "${AUDIT_MOUNT}" "${DMG}" >/dev/null
 DMG_APP="${AUDIT_MOUNT}/ach000.app"
@@ -139,27 +153,22 @@ DMG_APP="${AUDIT_MOUNT}/ach000.app"
 DMG_BIN="${DMG_APP}/Contents/MacOS/ach000"
 [[ -x "${DMG_BIN}" ]] || fail "executable bit missing on app inside DMG"
 DMG_ENTS="$(codesign -d --entitlements :- "${DMG_APP}" 2>/dev/null || true)"
-echo "${DMG_ENTS}" | grep -q "com.apple.security.application-groups" && fail "app inside DMG still has application-groups"
-echo "${DMG_ENTS}" | grep -q "com.apple.application-identifier" && fail "app inside DMG still has application-identifier"
+assert_safe_ents "${DMG_APP}" "${DMG_ENTS}"
 
-pkill -f "${DMG_APP}/Contents/MacOS/ach000" 2>/dev/null || true
+# A sandboxed Electron 42 build on Apple Silicon macOS 26 dies in ~200ms
+# (V8 ThreadIsolation SIGTRAP). Catching the process only at spawn is not
+# enough, and matching the DMG path misses App Translocation.
+pkill -x ach000 2>/dev/null || true
 echo "Launching app from DMG"
 if ! open "${DMG_APP}"; then
-  hdiutil detach "${AUDIT_MOUNT}" -quiet || true
   fail "open failed for app inside DMG"
 fi
-LAUNCH_OK=0
-for _ in 1 2 3 4 5 6 7 8; do
-  if pgrep -f "${DMG_APP}/Contents/MacOS/ach000" >/dev/null; then
-    LAUNCH_OK=1
-    break
-  fi
-  sleep 0.5
-done
-pkill -f "${DMG_APP}/Contents/MacOS/ach000" 2>/dev/null || true
-hdiutil detach "${AUDIT_MOUNT}" -quiet || true
-rmdir "${AUDIT_MOUNT}" 2>/dev/null || true
-[[ "${LAUNCH_OK}" -eq 1 ]] || fail "app inside DMG did not stay running after open"
+sleep 2
+if ! pgrep -x ach000 >/dev/null; then
+  fail "app inside DMG did not stay running after open"
+fi
+trap - EXIT
+cleanup_audit_mount
 
 echo "audit-release: ok"
 echo "  app: ${APP_BUNDLE}"
