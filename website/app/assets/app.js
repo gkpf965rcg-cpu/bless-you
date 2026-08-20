@@ -2186,11 +2186,11 @@ class CaptureProcessor extends AudioWorkletProcessor {
 }
 registerProcessor("capture-processor", CaptureProcessor);
 `;
-  var PREFERRED_AUDIO = {
-    echoCancellation: { ideal: true },
-    noiseSuppression: { ideal: false },
-    autoGainControl: { ideal: false },
-    channelCount: { ideal: 1 }
+  var RAW_MIC = {
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+    channelCount: 1
   };
   function audioContextConstructor() {
     return window.AudioContext || window.webkitAudioContext;
@@ -2322,17 +2322,26 @@ registerProcessor("capture-processor", CaptureProcessor);
       this._frameLogged = false;
     }
     async _openMicrophone() {
-      try {
-        return await navigator.mediaDevices.getUserMedia({
-          audio: PREFERRED_AUDIO,
-          video: false
-        });
-      } catch (error) {
-        if (error?.name === "OverconstrainedError" || error?.name === "ConstraintNotSatisfiedError") {
-          console.warn("Microphone constraints not supported; retrying with defaults");
-          return navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const attempts = [
+        RAW_MIC,
+        { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      ];
+      let lastError = null;
+      for (const audio of attempts) {
+        try {
+          return await navigator.mediaDevices.getUserMedia({ audio, video: false });
+        } catch (error) {
+          lastError = error;
+          if (error?.name !== "OverconstrainedError" && error?.name !== "ConstraintNotSatisfiedError") {
+            throw error;
+          }
         }
-        throw error;
+      }
+      console.warn("Raw microphone constraints not supported; retrying with defaults");
+      try {
+        return await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } catch (error) {
+        throw lastError || error;
       }
     }
     async _connectProcessor() {
@@ -2521,6 +2530,13 @@ registerProcessor("capture-processor", CaptureProcessor);
       lowRatio: total > 0 ? low / total : 0
     };
   }
+  function isBurstFrame(features, noiseRms, prevRms = 0) {
+    const loud = features.rms > Math.max(noiseRms * 4.2, 0.016);
+    const bright = features.highRatio > 0.22 && features.centroid > 1050;
+    const fricative = features.zcr > 0.1 && features.highRatio > 0.18 && features.rms > Math.max(noiseRms * 3.4, 0.014);
+    const sharp = prevRms > 0 && features.rms > prevRms * 3 && features.rms > Math.max(noiseRms * 3.2, 0.014) && (features.centroid > 900 || features.zcr > 0.08 || features.highRatio > 0.16);
+    return loud && (bright || fricative) || sharp;
+  }
   var AcousticDetector = class {
     constructor(onResult) {
       this.onResult = onResult;
@@ -2528,6 +2544,7 @@ registerProcessor("capture-processor", CaptureProcessor);
       this.frameSize = 1024;
       this.pending = new Float32Array(0);
       this.noiseRms = 0.01;
+      this.prevRms = 0.01;
       this.event = null;
     }
     push(samples, sampleRate) {
@@ -2547,7 +2564,8 @@ registerProcessor("capture-processor", CaptureProcessor);
       if (features.rms < this.noiseRms * 1.8) {
         this.noiseRms = this.noiseRms * 0.995 + features.rms * 5e-3;
       }
-      const burst = features.rms > Math.max(this.noiseRms * 7, 0.03) && features.highRatio > 0.32 && features.centroid > 1400;
+      const burst = isBurstFrame(features, this.noiseRms, this.prevRms);
+      this.prevRms = features.rms * 0.45 + this.prevRms * 0.55;
       if (!this.event && burst) {
         this.event = { frames: [features], startedQuiet: 0 };
         return;
@@ -2568,7 +2586,7 @@ registerProcessor("capture-processor", CaptureProcessor);
     _finishEvent() {
       const frames = this.event.frames;
       this.event = null;
-      if (frames.length < 3) return;
+      if (frames.length < 2) return;
       const duration = frames.length * (this.frameSize / 2 / this.sampleRate);
       let peakIndex = 0;
       for (let i2 = 1; i2 < frames.length; i2 += 1) {
@@ -2576,13 +2594,14 @@ registerProcessor("capture-processor", CaptureProcessor);
       }
       const peak = frames[peakIndex];
       const attack = peakIndex * (this.frameSize / 2 / this.sampleRate);
-      const durationScore = duration >= 0.12 && duration <= 0.75 ? 1 : duration < 0.12 ? duration / 0.12 : clamp(1 - (duration - 0.75) / 0.3, 0, 1);
-      const attackScore = attack <= 0.12 ? 1 : clamp(1 - (attack - 0.12) / 0.15, 0, 1);
-      const centroidScore = peak.centroid >= 1600 && peak.centroid <= 6200 ? 1 : 0.2;
-      const highScore = clamp((peak.highRatio - 0.25) / 0.35, 0, 1);
-      const coughHint = peak.lowRatio > 0.55 && peak.centroid < 1800 ? 0.75 : peak.lowRatio * 0.35;
+      const durationScore = duration >= 0.08 && duration <= 0.85 ? 1 : duration < 0.08 ? duration / 0.08 : clamp(1 - (duration - 0.85) / 0.3, 0, 1);
+      const attackScore = attack <= 0.16 ? 1 : clamp(1 - (attack - 0.16) / 0.18, 0, 1);
+      const centroidScore = peak.centroid >= 1100 && peak.centroid <= 7e3 ? 1 : peak.centroid >= 700 ? 0.55 : 0.15;
+      const highScore = clamp((peak.highRatio - 0.18) / 0.35, 0, 1);
+      const zcrScore = clamp((peak.zcr - 0.06) / 0.14, 0, 1);
+      const coughHint = peak.lowRatio > 0.62 && peak.centroid < 1500 && peak.zcr < 0.08 ? 0.75 : peak.lowRatio * 0.3;
       const sneeze = clamp(
-        durationScore * 0.28 + attackScore * 0.18 + centroidScore * 0.24 + highScore * 0.3,
+        durationScore * 0.24 + attackScore * 0.16 + centroidScore * 0.22 + highScore * 0.22 + zcrScore * 0.16,
         0,
         1
       );
@@ -2595,22 +2614,92 @@ registerProcessor("capture-processor", CaptureProcessor);
     stop() {
       this.pending = new Float32Array(0);
       this.event = null;
+      this.prevRms = 0.01;
     }
   };
 
-  // src/detection/yamnet.js
-  function scoreFor(categories, pattern) {
-    let best = 0;
-    for (const category of categories) {
-      const name = `${category.categoryName || ""} ${category.displayName || ""}`;
-      if (pattern.test(name)) {
-        best = Math.max(best, category.score || 0);
+  // src/detection/decision.js
+  function sneezeThreshold(sensitivity) {
+    return 0.66 - sensitivity * 0.52;
+  }
+  function shouldBless(sneeze, cough, sensitivity) {
+    if (sneeze < sneezeThreshold(sensitivity)) return false;
+    if (cough >= sneeze + 0.2 && cough >= 0.34) return false;
+    return true;
+  }
+  var SNEEZE_LIKE = [
+    { test: (name) => /\bsneeze\b/.test(name), weight: 1 },
+    { test: (name) => /\bgasp\b/.test(name), weight: 0.9 },
+    { test: (name) => /\bsnort\b/.test(name), weight: 0.85 },
+    { test: (name) => /\bsniff\b/.test(name), weight: 0.55 },
+    { test: (name) => /throat clearing/.test(name), weight: 0.55 }
+  ];
+  function categoryName(category) {
+    return `${category.categoryName || ""} ${category.displayName || ""}`.toLowerCase().trim();
+  }
+  function scoresFromYamnetCategories(categories) {
+    let sneeze = 0;
+    let cough = 0;
+    for (const category of categories || []) {
+      const name = categoryName(category);
+      const score = category.score || 0;
+      if (/\bcough\b/.test(name)) {
+        cough = Math.max(cough, score);
+      }
+      for (const { test, weight } of SNEEZE_LIKE) {
+        if (test(name)) sneeze = Math.max(sneeze, score * weight);
       }
     }
-    return best;
+    return { sneeze, cough };
   }
+  var YAMNET_CATEGORY_ALLOWLIST = [
+    "Sneeze",
+    "Cough",
+    "Throat clearing",
+    "Sniff",
+    "Gasp",
+    "Snort"
+  ];
+
+  // src/detection/yamnet.js
   function assetUrl(relativePath) {
     return new URL(relativePath, appDirectoryUrl()).href;
+  }
+  async function readBytes(url) {
+    try {
+      const response = await fetch(url, { credentials: "same-origin" });
+      if (response.ok) return new Uint8Array(await response.arrayBuffer());
+      if (response.status) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("fetch of YAMNet model failed; trying XHR", error?.message || error);
+    }
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET", url);
+      xhr.responseType = "arraybuffer";
+      xhr.onload = () => {
+        if (xhr.status === 0 || xhr.status === 200) {
+          resolve(new Uint8Array(xhr.response));
+          return;
+        }
+        reject(new Error(`HTTP ${xhr.status}`));
+      };
+      xhr.onerror = () => reject(new Error("Could not read the YAMNet model"));
+      xhr.send();
+    });
+  }
+  async function createClassifier(AudioClassifier, fileset, modelBuffer, extraOptions) {
+    return AudioClassifier.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetBuffer: modelBuffer
+      },
+      runningMode: "AUDIO_CLIPS",
+      maxResults: 20,
+      scoreThreshold: 0.03,
+      ...extraOptions
+    });
   }
   async function createYamnetDetector(onResult, onError) {
     let AudioClassifier;
@@ -2624,23 +2713,23 @@ registerProcessor("capture-processor", CaptureProcessor);
     const wasmBase = assetUrl("wasm").replace(/\/$/, "");
     const modelPath = assetUrl("models/yamnet.tflite");
     try {
-      const modelProbe = await fetch(modelPath, {
-        credentials: "same-origin",
-        signal: typeof AbortSignal !== "undefined" && AbortSignal.timeout ? AbortSignal.timeout(8e3) : void 0
-      });
-      if (!modelProbe.ok) {
-        console.warn("YAMNet model was not found", modelProbe.status);
+      const modelBuffer = await readBytes(modelPath);
+      if (!modelBuffer || modelBuffer.length < 1e5) {
+        console.warn("YAMNet model was missing or too small");
         return null;
       }
       const fileset = await FilesetResolver.forAudioTasks(wasmBase);
-      const classifier = await AudioClassifier.createFromOptions(fileset, {
-        baseOptions: {
-          modelAssetPath: modelPath
-        },
-        runningMode: "AUDIO_CLIPS",
-        maxResults: 12,
-        scoreThreshold: 0.05
-      });
+      let classifier;
+      try {
+        classifier = await createClassifier(AudioClassifier, fileset, modelBuffer, {
+          categoryAllowlist: YAMNET_CATEGORY_ALLOWLIST
+        });
+      } catch (error) {
+        console.warn("YAMNet allowlist failed; using full label set", error?.message || error);
+        classifier = await createClassifier(AudioClassifier, fileset, modelBuffer, {
+          maxResults: -1
+        });
+      }
       return {
         kind: "yamnet",
         classify(samples, sampleRate) {
@@ -2650,10 +2739,11 @@ registerProcessor("capture-processor", CaptureProcessor);
             let cough = 0;
             for (const result of results || []) {
               const categories = result.classifications?.[0]?.categories || [];
-              sneeze = Math.max(sneeze, scoreFor(categories, /sneeze/i));
-              cough = Math.max(cough, scoreFor(categories, /cough/i));
+              const scores = scoresFromYamnetCategories(categories);
+              sneeze = Math.max(sneeze, scores.sneeze);
+              cough = Math.max(cough, scores.cough);
             }
-            if (sneeze > 0.05 || cough > 0.05) {
+            if (sneeze > 0.03 || cough > 0.03) {
               const scores = sneezeScores(sneeze, cough);
               onResult(scores.sneeze, scores.cough);
             }
@@ -2675,7 +2765,7 @@ registerProcessor("capture-processor", CaptureProcessor);
   // src/detection/pipeline.js
   var TARGET_RATE = 16e3;
   var WINDOW_SAMPLES = 16e3;
-  var HOP_SAMPLES = 8e3;
+  var HOP_SAMPLES = 4e3;
   var YAMNET_TIMEOUT_MS = 12e3;
   function withTimeout2(promise, ms, label) {
     return new Promise((resolve, reject) => {
@@ -2722,19 +2812,17 @@ registerProcessor("capture-processor", CaptureProcessor);
     push(samples, sampleRate) {
       if (!this.ready) return;
       const resampled = resample(samples, sampleRate, TARGET_RATE);
-      if (this.yamnet) {
-        const merged = new Float32Array(this.buffer.length + resampled.length);
-        merged.set(this.buffer);
-        merged.set(resampled, this.buffer.length);
-        this.buffer = merged;
-        while (this.buffer.length >= WINDOW_SAMPLES) {
-          const window2 = this.buffer.subarray(0, WINDOW_SAMPLES);
-          this.yamnet.classify(window2, TARGET_RATE);
-          this.buffer = this.buffer.slice(HOP_SAMPLES);
-        }
-        return;
-      }
       this.acoustic.push(resampled, TARGET_RATE);
+      if (!this.yamnet) return;
+      const merged = new Float32Array(this.buffer.length + resampled.length);
+      merged.set(this.buffer);
+      merged.set(resampled, this.buffer.length);
+      this.buffer = merged;
+      while (this.buffer.length >= WINDOW_SAMPLES) {
+        const window2 = this.buffer.subarray(0, WINDOW_SAMPLES);
+        this.yamnet.classify(new Float32Array(window2), TARGET_RATE);
+        this.buffer = this.buffer.slice(HOP_SAMPLES);
+      }
     }
     stop() {
       this.buffer = new Float32Array(0);
@@ -2933,9 +3021,6 @@ registerProcessor("capture-processor", CaptureProcessor);
   function isWeb() {
     return getRuntime().shell === "web";
   }
-  function threshold() {
-    return 0.78 - state.sensitivity * 0.52;
-  }
   function sensitivityLabel() {
     if (state.sensitivity < 0.35) return "Picky";
     if (state.sensitivity > 0.7) return "Eager";
@@ -2948,8 +3033,7 @@ registerProcessor("capture-processor", CaptureProcessor);
     if (!state.isListening) return;
     const now = Date.now() / 1e3;
     if (now - state.lastTrigger < COOLDOWN) return;
-    if (sneeze < threshold()) return;
-    if (sneeze < cough) return;
+    if (!shouldBless(sneeze, cough, state.sensitivity)) return;
     state.lastTrigger = now;
     state.lastSneezeAt = /* @__PURE__ */ new Date();
     state.sneezeCount += 1;
@@ -3085,7 +3169,7 @@ Continue?`);
     try {
       if (isWeb()) {
         unlockSpeech();
-        const detector = pipeline.start();
+        const detector2 = pipeline.start();
         await capture.start();
         if (generation !== startGeneration) {
           pipeline.stop();
@@ -3099,15 +3183,15 @@ Continue?`);
         state.starting = false;
         state.statusText = "Listening for sneezes";
         render();
-        const kind = await detector;
+        const kind2 = await detector2;
         if (generation !== startGeneration) return;
-        if (kind !== "yamnet") {
+        if (kind2 !== "yamnet") {
           console.warn("YAMNet did not load; using on-device acoustic detection");
         }
         await requestWakeLock();
         return;
       }
-      await pipeline.start();
+      const detector = pipeline.start();
       await capture.start();
       if (generation !== startGeneration) {
         pipeline.stop();
@@ -3121,6 +3205,12 @@ Continue?`);
       state.starting = false;
       state.statusText = "Listening for sneezes";
       watchDevices();
+      render();
+      const kind = await detector;
+      if (generation !== startGeneration) return;
+      if (kind !== "yamnet") {
+        console.warn("YAMNet did not load; using on-device acoustic detection");
+      }
       await requestWakeLock();
     } catch (error) {
       console.error("Could not start listening", error?.name || "", error?.message || error);

@@ -48,6 +48,6 @@ Website reinstalls only pick up a source fix after this command finishes and rep
 
 ## How sneeze detection works
 
-ach000 prefers [YAMNet](https://www.tensorflow.org/hub/tutorials/yamnet) via MediaPipe, bundled with the app. If the model cannot load, it uses an on-device acoustic detector. It ignores coughs when a cough scores higher than a sneeze, waits a few seconds between blessings, and never writes audio to disk.
+ach000 prefers [YAMNet](https://www.tensorflow.org/hub/tutorials/yamnet) via MediaPipe, bundled with the app, and always runs a lightweight acoustic burst detector next to it. If the model cannot load, the acoustic detector still listens. It ignores a sound only when a cough is clearly stronger than a sneeze, waits a few seconds between blessings, and never writes audio to disk.
 
 Classifier backends live under `src/detection/` behind a small `SneezeClassifying` contract so another on-device engine can be added later.

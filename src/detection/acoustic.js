@@ -110,6 +110,21 @@ function frameFeatures(frame, sampleRate) {
   };
 }
 
+export function isBurstFrame(features, noiseRms, prevRms = 0) {
+  const loud = features.rms > Math.max(noiseRms * 4.2, 0.016);
+  const bright = features.highRatio > 0.22 && features.centroid > 1050;
+  const fricative =
+    features.zcr > 0.1 &&
+    features.highRatio > 0.18 &&
+    features.rms > Math.max(noiseRms * 3.4, 0.014);
+  const sharp =
+    prevRms > 0 &&
+    features.rms > prevRms * 3 &&
+    features.rms > Math.max(noiseRms * 3.2, 0.014) &&
+    (features.centroid > 900 || features.zcr > 0.08 || features.highRatio > 0.16);
+  return (loud && (bright || fricative)) || sharp;
+}
+
 export class AcousticDetector {
   constructor(onResult) {
     this.onResult = onResult;
@@ -117,6 +132,7 @@ export class AcousticDetector {
     this.frameSize = 1024;
     this.pending = new Float32Array(0);
     this.noiseRms = 0.01;
+    this.prevRms = 0.01;
     this.event = null;
   }
 
@@ -140,10 +156,8 @@ export class AcousticDetector {
       this.noiseRms = this.noiseRms * 0.995 + features.rms * 0.005;
     }
 
-    const burst =
-      features.rms > Math.max(this.noiseRms * 7, 0.03) &&
-      features.highRatio > 0.32 &&
-      features.centroid > 1400;
+    const burst = isBurstFrame(features, this.noiseRms, this.prevRms);
+    this.prevRms = features.rms * 0.45 + this.prevRms * 0.55;
 
     if (!this.event && burst) {
       this.event = { frames: [features], startedQuiet: 0 };
@@ -168,7 +182,7 @@ export class AcousticDetector {
   _finishEvent() {
     const frames = this.event.frames;
     this.event = null;
-    if (frames.length < 3) return;
+    if (frames.length < 2) return;
 
     const duration = frames.length * (this.frameSize / 2 / this.sampleRate);
     let peakIndex = 0;
@@ -178,14 +192,15 @@ export class AcousticDetector {
     const peak = frames[peakIndex];
     const attack = peakIndex * (this.frameSize / 2 / this.sampleRate);
 
-    const durationScore = duration >= 0.12 && duration <= 0.75 ? 1 : duration < 0.12 ? duration / 0.12 : clamp(1 - (duration - 0.75) / 0.3, 0, 1);
-    const attackScore = attack <= 0.12 ? 1 : clamp(1 - (attack - 0.12) / 0.15, 0, 1);
-    const centroidScore = peak.centroid >= 1600 && peak.centroid <= 6200 ? 1 : 0.2;
-    const highScore = clamp((peak.highRatio - 0.25) / 0.35, 0, 1);
-    const coughHint = peak.lowRatio > 0.55 && peak.centroid < 1800 ? 0.75 : peak.lowRatio * 0.35;
+    const durationScore = duration >= 0.08 && duration <= 0.85 ? 1 : duration < 0.08 ? duration / 0.08 : clamp(1 - (duration - 0.85) / 0.3, 0, 1);
+    const attackScore = attack <= 0.16 ? 1 : clamp(1 - (attack - 0.16) / 0.18, 0, 1);
+    const centroidScore = peak.centroid >= 1100 && peak.centroid <= 7000 ? 1 : peak.centroid >= 700 ? 0.55 : 0.15;
+    const highScore = clamp((peak.highRatio - 0.18) / 0.35, 0, 1);
+    const zcrScore = clamp((peak.zcr - 0.06) / 0.14, 0, 1);
+    const coughHint = peak.lowRatio > 0.62 && peak.centroid < 1500 && peak.zcr < 0.08 ? 0.75 : peak.lowRatio * 0.3;
 
     const sneeze = clamp(
-      durationScore * 0.28 + attackScore * 0.18 + centroidScore * 0.24 + highScore * 0.3,
+      durationScore * 0.24 + attackScore * 0.16 + centroidScore * 0.22 + highScore * 0.22 + zcrScore * 0.16,
       0,
       1
     );
@@ -200,5 +215,6 @@ export class AcousticDetector {
   stop() {
     this.pending = new Float32Array(0);
     this.event = null;
+    this.prevRms = 0.01;
   }
 }

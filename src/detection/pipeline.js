@@ -3,7 +3,7 @@ import { createYamnetDetector } from "./yamnet.js";
 
 const TARGET_RATE = 16000;
 const WINDOW_SAMPLES = 16000;
-const HOP_SAMPLES = 8000;
+const HOP_SAMPLES = 4000;
 const YAMNET_TIMEOUT_MS = 12000;
 
 function withTimeout(promise, ms, label) {
@@ -56,20 +56,19 @@ export class SneezePipeline {
     if (!this.ready) return;
     const resampled = resample(samples, sampleRate, TARGET_RATE);
 
-    if (this.yamnet) {
-      const merged = new Float32Array(this.buffer.length + resampled.length);
-      merged.set(this.buffer);
-      merged.set(resampled, this.buffer.length);
-      this.buffer = merged;
-      while (this.buffer.length >= WINDOW_SAMPLES) {
-        const window = this.buffer.subarray(0, WINDOW_SAMPLES);
-        this.yamnet.classify(window, TARGET_RATE);
-        this.buffer = this.buffer.slice(HOP_SAMPLES);
-      }
-      return;
-    }
-
     this.acoustic.push(resampled, TARGET_RATE);
+
+    if (!this.yamnet) return;
+
+    const merged = new Float32Array(this.buffer.length + resampled.length);
+    merged.set(this.buffer);
+    merged.set(resampled, this.buffer.length);
+    this.buffer = merged;
+    while (this.buffer.length >= WINDOW_SAMPLES) {
+      const window = this.buffer.subarray(0, WINDOW_SAMPLES);
+      this.yamnet.classify(new Float32Array(window), TARGET_RATE);
+      this.buffer = this.buffer.slice(HOP_SAMPLES);
+    }
   }
 
   stop() {

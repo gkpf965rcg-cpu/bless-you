@@ -1,5 +1,6 @@
 import { MicCapture } from "./capture.js";
 import { SneezePipeline } from "./detection/pipeline.js";
+import { shouldBless } from "./detection/decision.js";
 import {
   applyRuntimeClass,
   deviceNoun,
@@ -67,10 +68,6 @@ function isWeb() {
   return getRuntime().shell === "web";
 }
 
-function threshold() {
-  return 0.78 - state.sensitivity * 0.52;
-}
-
 function sensitivityLabel() {
   if (state.sensitivity < 0.35) return "Picky";
   if (state.sensitivity > 0.7) return "Eager";
@@ -85,8 +82,7 @@ function handleClassification(sneeze, cough) {
   if (!state.isListening) return;
   const now = Date.now() / 1000;
   if (now - state.lastTrigger < COOLDOWN) return;
-  if (sneeze < threshold()) return;
-  if (sneeze < cough) return;
+  if (!shouldBless(sneeze, cough, state.sensitivity)) return;
 
   state.lastTrigger = now;
   state.lastSneezeAt = new Date();
@@ -263,7 +259,7 @@ async function start() {
       return;
     }
 
-    await pipeline.start();
+    const detector = pipeline.start();
     await capture.start();
     if (generation !== startGeneration) {
       pipeline.stop();
@@ -277,6 +273,12 @@ async function start() {
     state.starting = false;
     state.statusText = "Listening for sneezes";
     watchDevices();
+    render();
+    const kind = await detector;
+    if (generation !== startGeneration) return;
+    if (kind !== "yamnet") {
+      console.warn("YAMNet did not load; using on-device acoustic detection");
+    }
     await requestWakeLock();
   } catch (error) {
     console.error("Could not start listening", error?.name || "", error?.message || error);

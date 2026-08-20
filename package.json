@@ -15,7 +15,7 @@
     "release:mac:check": "bash scripts/release-mac.sh --check",
     "release:mac:finish": "bash scripts/release-mac.sh --finish",
     "web": "npm run build:app && python3 -m http.server --bind 127.0.0.1 --directory website 8787",
-    "test": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check scripts/after-sign.cjs && node --check scripts/notarize.cjs && node --check scripts/entitlements-policy.cjs && node scripts/check-entitlements.cjs"
+    "test": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check scripts/after-sign.cjs && node --check scripts/notarize.cjs && node --check scripts/entitlements-policy.cjs && node scripts/check-entitlements.cjs && node scripts/test-detection.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-audio": "^0.10.32",
