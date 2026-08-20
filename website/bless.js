@@ -1,74 +1,190 @@
 (() => {
+  // src/paths.js
+  function appDirectoryUrl() {
+    const url = new URL(window.location.href);
+    url.hash = "";
+    url.search = "";
+    let path = url.pathname || "/";
+    if (!path.endsWith("/")) {
+      const last = path.split("/").pop() || "";
+      if (last.includes(".")) {
+        path = path.slice(0, path.lastIndexOf("/") + 1);
+      } else {
+        path += "/";
+      }
+    }
+    url.pathname = path;
+    return url;
+  }
+
+  // src/speech/playlist.js
+  function shuffleCycle(items, previousLast) {
+    const next = items.slice();
+    for (let i = next.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const swap = next[i];
+      next[i] = next[j];
+      next[j] = swap;
+    }
+    if (next.length > 1 && previousLast != null && next[0] === previousLast) {
+      const swapWith = 1 + Math.floor(Math.random() * (next.length - 1));
+      const swap = next[0];
+      next[0] = next[swapWith];
+      next[swapWith] = swap;
+    }
+    return next;
+  }
+  function createClipPlaylist(clips) {
+    let order = [];
+    let index = 0;
+    let lastPlayed = null;
+    return {
+      next() {
+        if (!clips.length) return null;
+        if (index >= order.length) {
+          order = shuffleCycle(clips, lastPlayed);
+          index = 0;
+        }
+        const clip = order[index];
+        index += 1;
+        lastPlayed = clip;
+        return clip;
+      }
+    };
+  }
+
   // src/speech/speaking.js
-  var UTTERANCE = "Bless you.";
-  var currentUtterance = null;
-  var speakTimer = 0;
-  function preferredVoice() {
-    const voices = speechSynthesis.getVoices?.() || [];
-    const preferred = [
-      "Daniel",
-      "Kate",
-      "Serena",
-      "Samantha",
-      "Google UK English Male",
-      "Google UK English Female",
-      "Microsoft George",
-      "Microsoft Hazel"
-    ];
-    for (const name of preferred) {
-      const match = voices.find((voice) => voice.name.includes(name));
-      if (match) return match;
-    }
-    return voices.find((voice) => voice.lang?.toLowerCase().startsWith("en-gb")) || voices.find((voice) => voice.lang?.toLowerCase().startsWith("en")) || null;
+  var BLESS_YOU_CLIPS = [
+    "bless-you-1.wav",
+    "bless-you-2.wav",
+    "bless-you-3.wav",
+    "bless-you-4.wav"
+  ];
+  var playlist = createClipPlaylist(BLESS_YOU_CLIPS);
+  var players = /* @__PURE__ */ new Map();
+  var playing = false;
+  var playToken = 0;
+  function isAppPage() {
+    const path = (window.location.pathname || "/").replace(/\\/g, "/");
+    return path.includes("/app/") || /\/app\/?$/.test(path);
   }
-  function queueUtterance() {
-    const utterance = new SpeechSynthesisUtterance(UTTERANCE);
-    utterance.rate = 0.93;
-    utterance.pitch = 1.04;
-    const voice = preferredVoice();
-    if (voice) {
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
-    } else {
-      utterance.lang = "en-GB";
+  function clipUrl(filename) {
+    if (isAppPage()) {
+      return new URL(`audio/${filename}`, appDirectoryUrl()).href;
     }
-    currentUtterance = utterance;
-    try {
-      speechSynthesis.resume();
-    } catch {
-    }
-    speechSynthesis.speak(utterance);
+    return new URL(`app/audio/${filename}`, window.location.href).href;
   }
-  function speakInBrowser() {
-    if (!("speechSynthesis" in window)) return false;
-    window.clearTimeout(speakTimer);
-    if (currentUtterance && (speechSynthesis.speaking || speechSynthesis.pending)) {
-      speechSynthesis.cancel();
-      speakTimer = window.setTimeout(queueUtterance, 50);
-      return true;
-    }
-    queueUtterance();
-    return true;
+  function playerFor(filename) {
+    let el = players.get(filename);
+    if (el) return el;
+    el = new Audio();
+    el.preload = "auto";
+    el.playbackRate = 1;
+    el.src = clipUrl(filename);
+    players.set(filename, el);
+    return el;
   }
-  function speakBlessYou() {
-    if (window.blessyou?.platform === "linux" && window.blessyou.speak) {
-      window.blessyou.speak(UTTERANCE);
+  function pauseOthers(except) {
+    for (const el of players.values()) {
+      if (el === except) continue;
+      try {
+        el.pause();
+        el.currentTime = 0;
+      } catch {
+      }
+    }
+  }
+  function tryPlay(remaining) {
+    if (remaining <= 0) {
+      playing = false;
       return;
     }
-    if (!speakInBrowser() && window.blessyou?.speak) {
-      window.blessyou.speak(UTTERANCE);
+    if (typeof Audio === "undefined") {
+      console.warn("This browser cannot play bless-you recordings");
+      playing = false;
+      return;
+    }
+    const filename = playlist.next();
+    if (!filename) {
+      playing = false;
+      return;
+    }
+    const token = ++playToken;
+    let settled = false;
+    const el = playerFor(filename);
+    playing = true;
+    pauseOthers(el);
+    const finish = (ok) => {
+      if (token !== playToken || settled) return;
+      settled = true;
+      if (ok) {
+        playing = false;
+        return;
+      }
+      console.warn("Could not play bless-you recording", filename);
+      tryPlay(remaining - 1);
+    };
+    el.onended = () => finish(true);
+    el.onerror = () => finish(false);
+    try {
+      el.muted = false;
+      el.volume = 1;
+      el.playbackRate = 1;
+      el.currentTime = 0;
+    } catch {
+    }
+    try {
+      const start = el.play();
+      if (start && typeof start.then === "function") {
+        start.catch(() => finish(false));
+      }
+    } catch (error) {
+      console.warn("Could not play bless-you recording", error?.message || error);
+      finish(false);
     }
   }
+  function speakBlessYou() {
+    if (playing) return;
+    playing = true;
+    tryPlay(BLESS_YOU_CLIPS.length);
+  }
   function warmUpVoices() {
-    if (!("speechSynthesis" in window)) return;
-    speechSynthesis.getVoices();
-    speechSynthesis.addEventListener?.("voiceschanged", () => {
-      speechSynthesis.getVoices();
-    });
+    if (typeof Audio === "undefined") return;
+    try {
+      for (const filename of BLESS_YOU_CLIPS) {
+        playerFor(filename);
+      }
+    } catch (error) {
+      console.warn("Could not preload bless-you recordings", error?.message || error);
+    }
+  }
+
+  // src/web-remarks.js
+  var HOLD_MS = 8e3;
+  function startRemarks() {
+    const root = document.querySelector("[data-remarks]");
+    if (!root) return;
+    const remarks = [...root.querySelectorAll(".remark")];
+    if (!remarks.length) return;
+    const playlist2 = createClipPlaylist(remarks);
+    const show = (next) => {
+      if (!next) return;
+      for (const el of remarks) {
+        const visible = el === next;
+        el.classList.toggle("is-visible", visible);
+        el.setAttribute("aria-hidden", visible ? "false" : "true");
+      }
+      root.classList.add("is-ready");
+    };
+    show(playlist2.next());
+    if (remarks.length > 1) {
+      window.setInterval(() => show(playlist2.next()), HOLD_MS);
+    }
   }
 
   // src/web-bless.js
   warmUpVoices();
+  startRemarks();
   function blessNow(event) {
     event.preventDefault();
     speakBlessYou();

@@ -44,6 +44,20 @@ if (existsSync(fontsSrc)) {
   cpSync(fontsSrc, fontsDest, { recursive: true });
 }
 
+const audioDir = join(root, "website", "app", "audio");
+const requiredClips = [
+  "bless-you-1.wav",
+  "bless-you-2.wav",
+  "bless-you-3.wav",
+  "bless-you-4.wav"
+];
+for (const name of requiredClips) {
+  const file = join(audioDir, name);
+  if (!existsSync(file)) {
+    throw new Error(`Missing bless-you recording: ${file}`);
+  }
+}
+
 const fetchModel = join(root, "scripts", "fetch-model.mjs");
 if (existsSync(fetchModel)) {
   await import(fetchModel);
@@ -51,3 +65,4 @@ if (existsSync(fetchModel)) {
 
 console.log("Built website/app/assets/app.js");
 console.log("Built website/bless.js");
+console.log("Included website/app/audio/bless-you-{1,2,3,4}.wav");

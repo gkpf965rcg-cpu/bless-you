@@ -1,11 +1,15 @@
-const CACHE = "ach000-v4";
+const CACHE = "ach000-v5";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./icon.png",
   "./logo.svg",
-  "./manifest.webmanifest"
+  "./manifest.webmanifest",
+  "./audio/bless-you-1.wav",
+  "./audio/bless-you-2.wav",
+  "./audio/bless-you-3.wav",
+  "./audio/bless-you-4.wav"
 ];
 
 function shouldBypass(url) {
