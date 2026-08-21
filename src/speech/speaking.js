@@ -1,105 +1,153 @@
 /**
- * BlessYouSpeaking contract: speakBlessYou() plays the blessing locally.
- * macOS uses the Web Speech API (on-device voices). A future Windows port
- * can call a native TTS engine through the same function names.
+ * BlessYouSpeaking contract: speakBlessYou() plays a recorded blessing locally.
+ * Clips live in website/app/audio/ and are played at their natural pitch and speed.
  */
-const UTTERANCE = "Bless you.";
+import { appDirectoryUrl } from "../paths.js";
+import { createClipPlaylist } from "./playlist.js";
 
-// Chrome may garbage-collect the utterance if nothing in JS holds it.
-let currentUtterance = null;
-let speakTimer = 0;
+export const BLESS_YOU_CLIPS = [
+  "bless-you-1.wav",
+  "bless-you-2.wav",
+  "bless-you-3.wav",
+  "bless-you-4.wav"
+];
 
-function preferredVoice() {
-  const voices = speechSynthesis.getVoices?.() || [];
-  const preferred = [
-    "Daniel",
-    "Kate",
-    "Serena",
-    "Samantha",
-    "Google UK English Male",
-    "Google UK English Female",
-    "Microsoft George",
-    "Microsoft Hazel"
-  ];
+const playlist = createClipPlaylist(BLESS_YOU_CLIPS);
+const players = new Map();
+let playing = false;
+let playToken = 0;
 
-  for (const name of preferred) {
-    const match = voices.find((voice) => voice.name.includes(name));
-    if (match) return match;
-  }
-
-  return (
-    voices.find((voice) => voice.lang?.toLowerCase().startsWith("en-gb")) ||
-    voices.find((voice) => voice.lang?.toLowerCase().startsWith("en")) ||
-    null
-  );
+function isAppPage() {
+  const path = (window.location.pathname || "/").replace(/\\/g, "/");
+  return path.includes("/app/") || /\/app\/?$/.test(path);
 }
 
-function queueUtterance() {
-  const utterance = new SpeechSynthesisUtterance(UTTERANCE);
-  utterance.rate = 0.93;
-  utterance.pitch = 1.04;
-  const voice = preferredVoice();
-  if (voice) {
-    utterance.voice = voice;
-    utterance.lang = voice.lang;
-  } else {
-    utterance.lang = "en-GB";
+export function clipUrl(filename) {
+  if (isAppPage()) {
+    return new URL(`audio/${filename}`, appDirectoryUrl()).href;
   }
-  currentUtterance = utterance;
+  return new URL(`app/audio/${filename}`, window.location.href).href;
+}
+
+function playerFor(filename) {
+  let el = players.get(filename);
+  if (el) return el;
+  el = new Audio();
+  el.preload = "auto";
+  el.playbackRate = 1;
+  el.src = clipUrl(filename);
+  players.set(filename, el);
+  return el;
+}
+
+function pauseOthers(except) {
+  for (const el of players.values()) {
+    if (el === except) continue;
+    try {
+      el.pause();
+      el.currentTime = 0;
+    } catch {
+      // Ignore.
+    }
+  }
+}
+
+function tryPlay(remaining) {
+  if (remaining <= 0) {
+    playing = false;
+    return;
+  }
+  if (typeof Audio === "undefined") {
+    console.warn("This browser cannot play bless-you recordings");
+    playing = false;
+    return;
+  }
+
+  const filename = playlist.next();
+  if (!filename) {
+    playing = false;
+    return;
+  }
+
+  const token = ++playToken;
+  let settled = false;
+  const el = playerFor(filename);
+  playing = true;
+  pauseOthers(el);
+
+  const finish = (ok) => {
+    if (token !== playToken || settled) return;
+    settled = true;
+    if (ok) {
+      playing = false;
+      return;
+    }
+    console.warn("Could not play bless-you recording", filename);
+    tryPlay(remaining - 1);
+  };
+
+  el.onended = () => finish(true);
+  el.onerror = () => finish(false);
+
   try {
-    speechSynthesis.resume();
+    el.muted = false;
+    el.volume = 1;
+    el.playbackRate = 1;
+    el.currentTime = 0;
   } catch {
-    // Ignore.
-  }
-  speechSynthesis.speak(utterance);
-}
-
-function speakInBrowser() {
-  if (!("speechSynthesis" in window)) return false;
-
-  window.clearTimeout(speakTimer);
-
-  // Chrome drops speak() when it runs in the same turn as cancel().
-  // Only interrupt a blessing we started — a stuck speaking flag
-  // should not delay the first click past the user gesture.
-  if (currentUtterance && (speechSynthesis.speaking || speechSynthesis.pending)) {
-    speechSynthesis.cancel();
-    speakTimer = window.setTimeout(queueUtterance, 50);
-    return true;
+    // Some browsers throw if the file is not loaded yet.
   }
 
-  queueUtterance();
-  return true;
+  try {
+    const start = el.play();
+    if (start && typeof start.then === "function") {
+      start.catch(() => finish(false));
+    }
+  } catch (error) {
+    console.warn("Could not play bless-you recording", error?.message || error);
+    finish(false);
+  }
 }
 
 export function speakBlessYou() {
-  // Native TTS is Linux-only. Speak in this turn everywhere else so a
-  // click still counts as a user gesture (Safari / Chrome / Mac app).
-  if (window.blessyou?.platform === "linux" && window.blessyou.speak) {
-    window.blessyou.speak(UTTERANCE);
-    return;
-  }
-  if (!speakInBrowser() && window.blessyou?.speak) {
-    window.blessyou.speak(UTTERANCE);
-  }
+  if (playing) return;
+  playing = true;
+  tryPlay(BLESS_YOU_CLIPS.length);
 }
 
 export function warmUpVoices() {
-  if (!("speechSynthesis" in window)) return;
-  speechSynthesis.getVoices();
-  speechSynthesis.addEventListener?.("voiceschanged", () => {
-    speechSynthesis.getVoices();
-  });
+  if (typeof Audio === "undefined") return;
+  try {
+    for (const filename of BLESS_YOU_CLIPS) {
+      playerFor(filename);
+    }
+  } catch (error) {
+    console.warn("Could not preload bless-you recordings", error?.message || error);
+  }
 }
 
-/** Safari only speaks after speechSynthesis is used in a user gesture. */
+/** Safari / Chrome only play audio after a user gesture. */
 export function unlockSpeech() {
-  if (!("speechSynthesis" in window)) return;
+  if (typeof Audio === "undefined") return;
   try {
-    const utterance = new SpeechSynthesisUtterance(" ");
-    utterance.volume = 0;
-    speechSynthesis.speak(utterance);
+    const el = playerFor(BLESS_YOU_CLIPS[0]);
+    el.muted = true;
+    const start = el.play();
+    const restore = () => {
+      try {
+        el.pause();
+        el.currentTime = 0;
+      } catch {
+        // Ignore.
+      }
+      el.muted = false;
+    };
+    if (start && typeof start.then === "function") {
+      start.then(restore).catch(restore);
+    } else {
+      restore();
+    }
   } catch (error) {
-    console.warn("Could not unlock speech", error?.message || error);
+    console.warn("Could not unlock bless-you audio", error?.message || error);
   }
 }

@@ -249,6 +249,38 @@ main > h1:not(.title) {
   line-height: 1.6;
 }
 
+.remarks {
+  display: grid;
+  align-items: center;
+  margin: 48px auto 0;
+  max-width: 32rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.remarks .remark {
+  grid-area: 1 / 1;
+  width: 100%;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.75s ease;
+}
+
+.remarks:not(.is-ready) .remark:first-child,
+.remarks .remark.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remarks .remark {
+    transition: none;
+  }
+}
+
 footer {
   color: var(--muted);
   font-size: 0.9rem;

@@ -1,6 +1,8 @@
 import { speakBlessYou, warmUpVoices } from "./speech/speaking.js";
+import { startRemarks } from "./web-remarks.js";
 
 warmUpVoices();
+startRemarks();
 
 function blessNow(event) {
   event.preventDefault();
