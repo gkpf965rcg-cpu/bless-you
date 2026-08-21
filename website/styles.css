@@ -254,9 +254,9 @@ main > h1:not(.title) {
   align-items: center;
   margin: 48px auto 0;
   max-width: 32rem;
-  color: var(--muted);
-  font-size: 0.95rem;
-  line-height: 1.55;
+  font-size: clamp(1.35rem, 3.6vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.15;
   text-align: center;
 }
 
