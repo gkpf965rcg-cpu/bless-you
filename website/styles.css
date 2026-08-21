@@ -102,7 +102,7 @@ footer a:hover {
 }
 
 main {
-  padding: 10vh 0 8vh;
+  padding: 4vh 0 8vh;
 }
 
 .eyebrow {
@@ -252,7 +252,7 @@ main > h1:not(.title) {
 .remarks {
   display: grid;
   align-items: center;
-  margin: 48px auto 0;
+  margin: 0 auto 40px;
   max-width: 32rem;
   font-size: clamp(1.35rem, 3.6vw, 2.1rem);
   font-weight: 700;
@@ -369,7 +369,7 @@ footer a,
   }
 
   main {
-    padding: 7vh 0 6vh;
+    padding: 3vh 0 6vh;
   }
 
   .download,
